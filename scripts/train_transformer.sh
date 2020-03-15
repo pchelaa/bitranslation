@@ -8,7 +8,7 @@ install_libs=false
 prepare_dataset=false
 run_tensorboard=false
 source_lang=en
-target_lang=de
+target_lang=fr
 
 ##############################################################################################################
 
@@ -51,7 +51,7 @@ data_dir=$base_dir/data
 libs_dir=$base_dir/libs
 logs_dir=$base_dir/logs
 fairseq_dir=$libs_dir/fairseq
-dataset_dir=$base_dir/data/iwslt17.tokenized.$source_lang-$target_lang
+dataset_dir=$base_dir/data/wmt14_${source_lang}_${target_lang}
 checkpoints_dir=$base_dir/checkpoints
 
 ##############################################################################################################
@@ -129,11 +129,37 @@ echo -e "$(date +"%D %T") Training transformer\n"
 
 CUDA_VISIBLE_DEVICES=7 fairseq-train $dataset_dir \
     --arch transformer_iwslt_${source_lang}_${target_lang} \
-    --max-tokens 4096 \
     --share-decoder-input-output-embed \
-    --optimizer adam \
-    --adam-betas '(0.9, 0.98)' \
-    --clip-norm 0.0 \
+    --max-tokens 4096 \
+    attn_beta 0 \
+    attn_dropout 0.1 \
+    beam_size 4 \
+    beam_spread 3 \
+    emb_inp_device /cpu:0 \
+    emb_out_device /cpu:0 \
+    emb_size  512 \
+    ff_size 2048 \
+    hid_size 512 \
+    inp_emb_bias false \
+    label_smoothing 0.1 \
+    len_alpha 1.0 \
+    normalize_out true \
+    num_heads 8 \
+    num_layers 6 \
+    relu_dropout 0.1 \
+    replace true \
+    res_dropout 0.1 \
+    res_steps nlda \
+    rescale_emb true \
+    summarize_preactivations false \
+    --warmup-updates 16000 \
+    scale 0.0014 \
+    --optimizer adam --adam-betas '(0.9, 0.998)' --clip-norm 0 --adam-eps 1e-09
+
+
+
+
+
     --lr 5e-4 \
     --lr-scheduler inverse_sqrt \
     --warmup-updates 4000 \

@@ -7,7 +7,7 @@
 base_dir=/data/$USER/bidirectional_translation
 install_libs=false
 source_lang=en
-target_lang=de
+target_lang=fr
 
 ############################################################################################################
 
@@ -42,7 +42,7 @@ done
 
 data_dir=$base_dir/data
 libs_dir=$base_dir/libs
-dataset_dir=$base_dir/data/iwslt17.tokenized.$source_lang-$target_lang
+dataset_dir=$base_dir/data/wmt14_$source_lang-$target_lang
 prep_dir=$dataset_dir/prep
 tmp_dir=$dataset_dir/tmp
 orig_dir=$dataset_dir/orig
@@ -97,12 +97,35 @@ fi
 
 SCRIPTS=$mosesdecoder_dir/scripts
 TOKENIZER=$SCRIPTS/tokenizer/tokenizer.perl
-LC=$SCRIPTS/tokenizer/lowercase.perl
 CLEAN=$SCRIPTS/training/clean-corpus-n.perl
+NORM_PUNC=$SCRIPTS/tokenizer/normalize-punctuation.perl
+REM_NON_PRINT_CHAR=$SCRIPTS/tokenizer/remove-non-printing-char.perl
 BPEROOT=$subword_nmt_dir/subword_nmt
-BPE_TOKENS=10000
-URL="https://wit3.fbk.eu/archive/2017-01-trnted/texts/$source_lang/$target_lang/$source_lang-$target_lang.tgz"
-GZ=$source_lang-$target_lang.tgz
+BPE_TOKENS=4000
+
+URLS=(
+    "http://statmt.org/wmt13/training-parallel-europarl-v7.tgz"
+    "http://statmt.org/wmt13/training-parallel-commoncrawl.tgz"
+    "http://statmt.org/wmt13/training-parallel-un.tgz"
+    "http://statmt.org/wmt14/training-parallel-nc-v9.tgz"
+    "http://statmt.org/wmt10/training-giga-${target_lang}${source_lang}.tar"
+    "http://statmt.org/wmt14/test-full.tgz"
+)
+FILES=(
+    "training-parallel-europarl-v7.tgz"
+    "training-parallel-commoncrawl.tgz"
+    "training-parallel-un.tgz"
+    "training-parallel-nc-v9.tgz"
+    "training-giga-${target_lang}${source_lang}.tar"
+    "test-full.tgz"
+)
+CORPORA=(
+    "training/europarl-v7.${target_lang}-${source_lang}"
+    "commoncrawl.${target_lang}-${source_lang}"
+    "un/undoc.2000.${target_lang}-${source_lang}"
+    "training/news-commentary-v9.${target_lang}-${source_lang}"
+    "giga-${target_lang}${source_lang}.release2.fixed"
+)
 
 ############################################################################################################
 
@@ -113,79 +136,68 @@ fi
 
 ############################################################################################################
 
-echo "Downloading data from ${URL}..."
 cd $orig_dir
-wget "$URL"
 
-if [ -f $GZ ]; then
-    echo "Data successfully downloaded."
-else
-    echo "Data not successfully downloaded."
-    exit
-fi
+for ((i=0;i<${#URLS[@]};++i)); do
+    file=${FILES[i]}
+    if [ -f $file ]; then
+        echo "$file already exists, skipping download"
+    else
+        url=${URLS[i]}
+        wget "$url"
+        if [ -f $file ]; then
+            echo "$url successfully downloaded."
+        else
+            echo "$url not successfully downloaded."
+            exit -1
+        fi
+        if [ ${file: -4} == ".tgz" ]; then
+            tar zxvf $file
+        elif [ ${file: -4} == ".tar" ]; then
+            tar xvf $file
+        fi
+    fi
+done
+
+gunzip giga-${target_lang}${source_lang}.release2.fixed.*.gz
+cd ..
 
 ############################################################################################################
-
-tar zxvf $GZ
-cd ..
 
 echo "pre-processing train data..."
 for l in $source_lang $target_lang; do
-    f=train.tags.$source_lang-$target_lang.$l
-    tok=train.tags.$source_lang-$target_lang.tok.$l
-
-    cat $orig_dir/$source_lang-$target_lang/$f | \
-    grep -v '<url>' | \
-    grep -v '<talkid>' | \
-    grep -v '<keywords>' | \
-    sed -e 's/<title>//g' | \
-    sed -e 's/<\/title>//g' | \
-    sed -e 's/<description>//g' | \
-    sed -e 's/<\/description>//g' | \
-    perl $TOKENIZER -threads 8 -l $l > $tmp_dir/$tok
-    echo ""
-done
-
-perl $CLEAN -ratio 1.5 $tmp_dir/train.tags.$source_lang-$target_lang.tok $source_lang $target_lang $tmp_dir/train.tags.$source_lang-$target_lang.clean 1 175
-
-for l in $source_lang $target_lang; do
-    perl $LC < $tmp_dir/train.tags.$source_lang-$target_lang.clean.$l > $tmp_dir/train.tags.$source_lang-$target_lang.$l
-done
-
-############################################################################################################
-
-echo "pre-processing valid/test data..."
-for l in $source_lang $target_lang; do
-    for o in `ls $orig_dir/$source_lang-$target_lang/IWSLT17.TED*.$l.xml`; do
-    fname=${o##*/}
-    f=$tmp_dir/${fname%.*}
-    echo $o $f
-    grep '<seg id' $o | \
-        sed -e 's/<seg id="[0-9]*">\s*//g' | \
-        sed -e 's/\s*<\/seg>\s*//g' | \
-        sed -e "s/\’/\'/g" | \
-    perl $TOKENIZER -threads 8 -l $l | \
-    perl $LC > $f
-    echo ""
+    rm $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
+    for f in "${CORPORA[@]}"; do
+        cat $orig_dir/$f.$l | \
+            perl $NORM_PUNC $l | \
+            perl $REM_NON_PRINT_CHAR | \
+            perl $TOKENIZER -threads 8 -a -l $l >> $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
     done
 done
 
 ############################################################################################################
 
-echo "creating train, valid, test..."
+echo "pre-processing test data..."
 for l in $source_lang $target_lang; do
-    awk '{if (NR%23 == 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.$l > $tmp_dir/valid.$l
-    awk '{if (NR%23 != 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.$l > $tmp_dir/train.$l
+    if [ "$l" == "$source_lang" ]; then
+        t="src"
+    else
+        t="ref"
+    fi
+    grep '<seg id' $orig_dir/test-full/newstest2014-${target_lang}${source_lang}-$t.$l.sgm | \
+        sed -e 's/<seg id="[0-9]*">\s*//g' | \
+        sed -e 's/\s*<\/seg>\s*//g' | \
+        sed -e "s/\’/\'/g" | \
+    perl $TOKENIZER -threads 8 -a -l $l > $tmp_dir/test.$l
+    echo ""
+done
 
-    cat $tmp_dir/IWSLT17.TED.dev2010.$source_lang-$target_lang.$l \
-        $tmp_dir/IWSLT17.TED.tst2010.$source_lang-$target_lang.$l \
-        $tmp_dir/IWSLT17.TED.tst2011.$source_lang-$target_lang.$l \
-        $tmp_dir/IWSLT17.TED.tst2012.$source_lang-$target_lang.$l \
-        $tmp_dir/IWSLT17.TED.tst2013.$source_lang-$target_lang.$l \
-        $tmp_dir/IWSLT17.TED.tst2014.$source_lang-$target_lang.$l \
-        $tmp_dir/IWSLT17.TED.tst2015.$source_lang-$target_lang.$l \
-        > $tmp_dir/test.$l
+############################################################################################################
 
+echo "splitting train and valid..."
+for l in $source_lang $target_lang; do
+    awk '{if (NR%1333 == 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/valid.$l
+    awk '{if (NR%1333 != 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/train.$l
 done
 
 TRAIN=$tmp_dir/train.$source_lang-$target_lang
@@ -203,8 +215,15 @@ python $BPEROOT/learn_bpe.py -s $BPE_TOKENS < $TRAIN > $BPE_CODE
 for L in $source_lang $target_lang; do
     for f in train.$L valid.$L test.$L; do
         echo "apply_bpe.py to ${f}..."
-        python $BPEROOT/apply_bpe.py -c $BPE_CODE < $tmp_dir/$f > $prep_dir/$f
+        python $BPEROOT/apply_bpe.py -c $BPE_CODE < $tmp/$f > $tmp/bpe.$f
     done
+done
+
+perl $CLEAN -ratio 1.5 $tmp_dir/bpe.train $source_lang $target_lang $prep/train 1 250
+perl $CLEAN -ratio 1.5 $tmp_dir/bpe.valid $source_lang $target_lang $prep/valid 1 250
+
+for L in $source_lang $target_lang; do
+    cp $tmp_dir/bpe.test.$L $prep_dir/test.$L
 done
 
 ############################################################################################################
@@ -217,8 +236,8 @@ fairseq-preprocess --source-lang $source_lang --target-lang $target_lang \
 
 echo "removing tmp dirs..."
 
-rm -r $prep_dir
-rm -r $tmp_dir
-rm -r $orig_dir
+#rm -r $prep_dir
+#rm -r $tmp_dir
+#rm -r $orig_dir
 
 ############################################################################################################
