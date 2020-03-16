@@ -9,6 +9,7 @@ prepare_dataset=false
 run_tensorboard=false
 source_lang=en
 target_lang=fr
+device_id=0
 
 ##############################################################################################################
 
@@ -21,6 +22,7 @@ Options:\n
   --run-tensorboard\t\tRun tensorboard (default=$run_tensorboard).\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language (default=$target_lang).\n
+  --device-id\t\t\tCuda device ID (default=$device_id).\n
 ";
 
 ##############################################################################################################
@@ -40,6 +42,8 @@ while [ $# -gt 0 ]; do
             shift; source_lang="$1"; shift ;;
         --target-lang)
             shift; target_lang="$1"; shift ;;
+        --device-id)
+            shift; device_id="$1"; shift ;;
         -*)  echo "Unknown argument: $1, exiting"; echo -e $usage; exit 1 ;;
         *)   break ;;   # end of options: interpreted as num-leaves
     esac
@@ -51,7 +55,7 @@ data_dir=$base_dir/data
 libs_dir=$base_dir/libs
 logs_dir=$base_dir/logs
 fairseq_dir=$libs_dir/fairseq
-dataset_dir=$base_dir/data/wmt14_${source_lang}_${target_lang}
+dataset_dir=$base_dir/data/wmt14_${source_lang}-${target_lang}
 checkpoints_dir=$base_dir/checkpoints
 
 ##############################################################################################################
@@ -127,8 +131,10 @@ fi
 echo -e "\n----------------------------------------------------------------------------------------------"
 echo -e "$(date +"%D %T") Training transformer\n"
 
-cuda_visible_devices=7 fairseq-train $dataset_dir \
-    --arch transformer_wmt_${source_lang}_${target_lang} \
+CUDA_VISIBLE_DEVICES=$device_id
+
+fairseq-train $dataset_dir \
+    --arch transformer \
     --share-decoder-input-output-embed \
     --max-tokens 4096 \
     --attention-dropout 0.1 \
@@ -139,10 +145,9 @@ cuda_visible_devices=7 fairseq-train $dataset_dir \
     --encoder-normalize-before --decoder-normalize-before \
     --encoder-attention-heads 8 --encoder-attention-heads 8 \
     --encoder-layers 6 --decoder-layers 6 \
-    --relu_dropout 0.1 \
     --dropout 0.1 \
     --warmup-updates 16000 \
-    --optimizer adam --adam-betas '(0.9, 0.998)' --clip-norm 0 --adam-eps 1e-09
+    --optimizer adam --adam-betas '(0.9, 0.998)' --clip-norm 0 --adam-eps 1e-09 \
     --eval-bleu \
     --eval-bleu-args '{"beam": 4, "max_len_a": 1.2, "max_len_b": 10}' \
     --eval-bleu-detok moses \
@@ -151,7 +156,7 @@ cuda_visible_devices=7 fairseq-train $dataset_dir \
     --maximize-best-checkpoint-metric \
     --save-dir $checkpoints_dir \
     --save-interval 10 \
-    --tensorboard-logdir $logs_dir
+    --tensorboard-logdir $logs_dir \
     --lr 5e-4 \
     --lr-scheduler inverse_sqrt \
     --weight-decay 0.0001 \

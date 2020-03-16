@@ -207,6 +207,9 @@ if [ $skip_download_files == false ]; then
         corpora_files="$orig_dir/test-full/newstest2014-${target_lang}${source_lang}-src.$l.sgm\|$corpora_files"
         corpora_files="$orig_dir/test-full/newstest2014-${target_lang}${source_lang}-ref.$l.sgm\|$corpora_files"
         for f in "${CORPORA[@]}"; do
+            awk '{if (NR%61 == 0)  print $0; }' $orig_dir/$f.$l > $orig_dir/$f.$l.filtered
+            rm -f $orig_dir/$f.$l
+            mv $orig_dir/$f.$l.filtered $orig_dir/$f.$l
             corpora_files="$orig_dir/$f.$l\|$corpora_files"
         done
     done
@@ -224,6 +227,7 @@ if [ $skip_preprocess_train_data == false ]; then
 
     for l in $source_lang $target_lang; do
         rm -f  $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
+
         for f in "${CORPORA[@]}"; do
             cat $orig_dir/$f.$l | \
                 perl $NORM_PUNC $l | \
@@ -261,8 +265,8 @@ if [ $skip_split_dataset == false ]; then
     echo -e "$(date +"%D %T") Splitting train and valid\n"
 
     for l in $source_lang $target_lang; do
-        awk '{if (NR%1333 == 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/valid.$l
-        awk '{if (NR%1333 != 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/train.$l
+        awk '{if (NR%23 == 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/valid.$l
+        awk '{if (NR%23 != 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/train.$l
     done
 fi
 
@@ -284,12 +288,12 @@ if [ $skip_learn_bpe == false ]; then
     for L in $source_lang $target_lang; do
         for f in train.$L valid.$L test.$L; do
             echo "apply_bpe.py to ${f}..."
-            python $BPEROOT/apply_bpe.py -c $BPE_CODE < $tmp/$f > $tmp/bpe.$f
+            python $BPEROOT/apply_bpe.py -c $BPE_CODE < $tmp_dir/$f > $tmp_dir/bpe.$f
         done
     done
 
-    perl $CLEAN -ratio 1.5 $tmp_dir/bpe.train $source_lang $target_lang $prep/train 1 250
-    perl $CLEAN -ratio 1.5 $tmp_dir/bpe.valid $source_lang $target_lang $prep/valid 1 250
+    perl $CLEAN -ratio 1.5 $tmp_dir/bpe.train $source_lang $target_lang $prep_dir/train 1 250
+    perl $CLEAN -ratio 1.5 $tmp_dir/bpe.valid $source_lang $target_lang $prep_dir/valid 1 250
 
     for L in $source_lang $target_lang; do
         cp $tmp_dir/bpe.test.$L $prep_dir/test.$L
