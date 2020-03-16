@@ -8,6 +8,13 @@ base_dir=/data/$USER/bidirectional_translation
 install_libs=false
 source_lang=en
 target_lang=fr
+skip_download_files=false
+skip_preprocess_train_data=false
+skip_preprocess_test_data=false
+skip_split_dataset=false
+skip_learn_bpe=false
+skip_fairseq_preprocess=false
+skip_remove_tmp_dirs=false
 
 ############################################################################################################
 
@@ -18,6 +25,13 @@ Options:\n
   --install-libs\t\t\tInstall libs (default=$install_libs).\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language(default=$target_lang).\n
+  --skip-download-files\t\tSkip download files (default=$skip_download_files).\n
+  --skip-preprocess-train-data\tSkip preprocess train data (default=$skip_preprocess_train_data).\n
+  --skip-preprocess-test-data\tSkip preprocess test data (default=$skip_preprocess_test_data).\n
+  --skip-split-dataset\t\tSkip split dataset on train and valid (default=$skip_split_dataset).\n
+  --skip-learn-bpe\t\tSkip learn bpe (default=$skip_learn_bpe).\n
+  --skip-fairseq-preprocess\tSkip fairseq preprocess (default=$skip_fairseq_preprocess).\n
+  --skip-remove-tmp-dirs\t\tSkip remove temporary directories (default=$skip_remove_tmp_dirs).\n
 ";
 
 ############################################################################################################
@@ -33,6 +47,20 @@ while [ $# -gt 0 ]; do
             shift; source_lang="$1"; shift ;;
         --target-lang)
             shift; target_lang="$1"; shift ;;
+        --skip-download-files)
+            shift; if [ "${1}" == "true" ] || [ "${1}" == "false" ]; then skip_download_files=${1}; shift; else skip_download_files=true; fi ;;
+        --skip-preprocess-train-data)
+            shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_preprocess_train_data=${1}; shift; else skip_preprocess_train_data=true; fi ;;
+        --skip-preprocess-test-data)
+            shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_preprocess_test_data=${1}; shift; else skip_preprocess_test_data=true; fi ;;
+        --skip-split-dataset)
+            shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_split_dataset=${1}; shift; else skip_split_dataset=true; fi ;;
+        --skip-learn-bpe)
+            shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_learn_bpe=${1}; shift; else skip_learn_bpe=true; fi ;;
+        --skip-fairseq-preprocess)
+            shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_fairseq_preprocess=${1}; shift; else skip_fairseq_preprocess=true; fi ;;
+        --skip-remove-tmp-dirs)
+            shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_remove_tmp_dirs=${1}; shift; else skip_remove_tmp_dirs=true; fi ;;
         -*)  echo "Unknown argument: $1, exiting"; echo -e $usage; exit 1 ;;
         *)   break ;;   # end of options: interpreted as num-leaves
     esac
@@ -69,23 +97,32 @@ mkdir -p $orig_dir $tmp_dir $prep_dir $dataset_dir
 ############################################################################################################
 
 if [ ! -d $fairseq_dir ]; then
-    echo 'Cloning Fireseq github repository...'
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Cloning Fireseq github repository...\n"
+
     git clone https://github.com/pytorch/fairseq $fairseq_dir
 fi
 
 if [ ! -d $mosesdecoder_dir ]; then
-    echo 'Cloning Moses github repository (for tokenization scripts)...'
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Cloning Moses github repository (for tokenization scripts)...\n"
+
     git clone https://github.com/moses-smt/mosesdecoder.git $mosesdecoder_dir
 fi
 
 if [ ! -d $subword_nmt_dir ]; then
-    echo 'Cloning Subword NMT repository (for BPE pre-processing)...'
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Cloning Subword NMT repository (for BPE pre-processing)...\n"
+
     git clone https://github.com/rsennrich/subword-nmt.git $subword_nmt_dir
 fi
 
 ############################################################################################################
 
 if [ $install_libs == true ]; then
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Installing libs\n"
+
     pip install --upgrade pip --user
     pip install torchvision --upgrade --user
     pip install torch --upgrade --user
@@ -136,108 +173,147 @@ fi
 
 ############################################################################################################
 
-cd $orig_dir
+if [ $skip_download_files == false ]; then
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Downloading files\n"
 
-for ((i=0;i<${#URLS[@]};++i)); do
-    file=${FILES[i]}
-    if [ -f $file ]; then
-        echo "$file already exists, skipping download"
-    else
-        url=${URLS[i]}
-        wget "$url"
+    cd $orig_dir
+
+    for ((i=0;i<${#URLS[@]};++i)); do
+        file=${FILES[i]}
         if [ -f $file ]; then
-            echo "$url successfully downloaded."
+            echo "$file already exists, skipping download"
         else
-            echo "$url not successfully downloaded."
-            exit -1
+            url=${URLS[i]}
+            wget "$url"
+            if [ -f $file ]; then
+                echo "$url successfully downloaded."
+            else
+                echo "$url not successfully downloaded."
+                exit -1
+            fi
+            if [ ${file: -4} == ".tgz" ]; then
+                tar zxvf $file
+            elif [ ${file: -4} == ".tar" ]; then
+                tar xvf $file
+            fi
+            rm -f $file
         fi
-        if [ ${file: -4} == ".tgz" ]; then
-            tar zxvf $file
-        elif [ ${file: -4} == ".tar" ]; then
-            tar xvf $file
+    done
+
+    gunzip giga-${target_lang}${source_lang}.release2.fixed.*.gz
+
+    for l in $source_lang $target_lang; do
+        corpora_files="$orig_dir/test-full/newstest2014-${target_lang}${source_lang}-src.$l.sgm\|$corpora_files"
+        corpora_files="$orig_dir/test-full/newstest2014-${target_lang}${source_lang}-ref.$l.sgm\|$corpora_files"
+        for f in "${CORPORA[@]}"; do
+            corpora_files="$orig_dir/$f.$l\|$corpora_files"
+        done
+    done
+
+    rm -r `find $orig_dir -type f | xargs readlink -f | grep -v "${corpora_files:0:-2}"`
+
+    cd ..
+fi
+
+############################################################################################################
+
+if [ $skip_preprocess_train_data == false ]; then
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Preprocessing train data\n"
+
+    for l in $source_lang $target_lang; do
+        rm -f  $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
+        for f in "${CORPORA[@]}"; do
+            cat $orig_dir/$f.$l | \
+                perl $NORM_PUNC $l | \
+                perl $REM_NON_PRINT_CHAR | \
+                perl $TOKENIZER -threads 16 -a -l $l >> $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
+        done
+    done
+fi
+
+############################################################################################################
+
+if [ $skip_preprocess_test_data == false ]; then
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Preprocessing test data\n"
+
+    for l in $source_lang $target_lang; do
+        if [ "$l" == "$source_lang" ]; then
+            t="src"
+        else
+            t="ref"
         fi
-    fi
-done
-
-gunzip giga-${target_lang}${source_lang}.release2.fixed.*.gz
-cd ..
-
-############################################################################################################
-
-echo "pre-processing train data..."
-for l in $source_lang $target_lang; do
-    rm $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
-    for f in "${CORPORA[@]}"; do
-        cat $orig_dir/$f.$l | \
-            perl $NORM_PUNC $l | \
-            perl $REM_NON_PRINT_CHAR | \
-            perl $TOKENIZER -threads 8 -a -l $l >> $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
+        grep '<seg id' $orig_dir/test-full/newstest2014-${target_lang}${source_lang}-$t.$l.sgm | \
+            sed -e 's/<seg id="[0-9]*">\s*//g' | \
+            sed -e 's/\s*<\/seg>\s*//g' | \
+            sed -e "s/\’/\'/g" | \
+        perl $TOKENIZER -threads 16 -a -l $l > $tmp_dir/test.$l
+        echo ""
     done
-done
+fi
 
 ############################################################################################################
 
-echo "pre-processing test data..."
-for l in $source_lang $target_lang; do
-    if [ "$l" == "$source_lang" ]; then
-        t="src"
-    else
-        t="ref"
-    fi
-    grep '<seg id' $orig_dir/test-full/newstest2014-${target_lang}${source_lang}-$t.$l.sgm | \
-        sed -e 's/<seg id="[0-9]*">\s*//g' | \
-        sed -e 's/\s*<\/seg>\s*//g' | \
-        sed -e "s/\’/\'/g" | \
-    perl $TOKENIZER -threads 8 -a -l $l > $tmp_dir/test.$l
-    echo ""
-done
+if [ $skip_split_dataset == false ]; then
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Splitting train and valid\n"
 
-############################################################################################################
-
-echo "splitting train and valid..."
-for l in $source_lang $target_lang; do
-    awk '{if (NR%1333 == 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/valid.$l
-    awk '{if (NR%1333 != 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/train.$l
-done
-
-TRAIN=$tmp_dir/train.$source_lang-$target_lang
-BPE_CODE=$prep_dir/code
-rm -f $TRAIN
-for l in $source_lang $target_lang; do
-    cat $tmp_dir/train.$l >> $TRAIN
-done
-
-############################################################################################################
-
-echo "learn_bpe.py on ${TRAIN}..."
-python $BPEROOT/learn_bpe.py -s $BPE_TOKENS < $TRAIN > $BPE_CODE
-
-for L in $source_lang $target_lang; do
-    for f in train.$L valid.$L test.$L; do
-        echo "apply_bpe.py to ${f}..."
-        python $BPEROOT/apply_bpe.py -c $BPE_CODE < $tmp/$f > $tmp/bpe.$f
+    for l in $source_lang $target_lang; do
+        awk '{if (NR%1333 == 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/valid.$l
+        awk '{if (NR%1333 != 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/train.$l
     done
-done
-
-perl $CLEAN -ratio 1.5 $tmp_dir/bpe.train $source_lang $target_lang $prep/train 1 250
-perl $CLEAN -ratio 1.5 $tmp_dir/bpe.valid $source_lang $target_lang $prep/valid 1 250
-
-for L in $source_lang $target_lang; do
-    cp $tmp_dir/bpe.test.$L $prep_dir/test.$L
-done
+fi
 
 ############################################################################################################
 
-fairseq-preprocess --source-lang $source_lang --target-lang $target_lang \
-    --trainpref $prep_dir/train --validpref $prep_dir/valid --testpref $prep_dir/test \
-    --destdir $dataset_dir
+if [ $skip_learn_bpe == false ]; then
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Learning bpe\n"
+
+    TRAIN=$tmp_dir/train.$source_lang-$target_lang
+    BPE_CODE=$prep_dir/code
+    rm -f $TRAIN
+    for l in $source_lang $target_lang; do
+       cat $tmp_dir/train.$l >> $TRAIN
+    done
+
+    python $BPEROOT/learn_bpe.py -s $BPE_TOKENS < $TRAIN > $BPE_CODE
+
+    for L in $source_lang $target_lang; do
+        for f in train.$L valid.$L test.$L; do
+            echo "apply_bpe.py to ${f}..."
+            python $BPEROOT/apply_bpe.py -c $BPE_CODE < $tmp/$f > $tmp/bpe.$f
+        done
+    done
+
+    perl $CLEAN -ratio 1.5 $tmp_dir/bpe.train $source_lang $target_lang $prep/train 1 250
+    perl $CLEAN -ratio 1.5 $tmp_dir/bpe.valid $source_lang $target_lang $prep/valid 1 250
+
+    for L in $source_lang $target_lang; do
+        cp $tmp_dir/bpe.test.$L $prep_dir/test.$L
+    done
+fi
 
 ############################################################################################################
 
-echo "removing tmp dirs..."
+if [ $skip_fairseq_preprocess == false ]; then
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Fairseq preprocessing\n"
 
-#rm -r $prep_dir
-#rm -r $tmp_dir
-#rm -r $orig_dir
+    fairseq-preprocess --source-lang $source_lang --target-lang $target_lang \
+        --trainpref $prep_dir/train --validpref $prep_dir/valid --testpref $prep_dir/test \
+        --destdir $dataset_dir
+fi
+
+############################################################################################################
+
+if [ $skip_remove_tmp_dirs == false ]; then
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Removing temporary directories\n"
+
+    rm -r $prep_dir $tmp_dir $orig_dir
+fi
 
 ############################################################################################################

@@ -127,48 +127,24 @@ fi
 echo -e "\n----------------------------------------------------------------------------------------------"
 echo -e "$(date +"%D %T") Training transformer\n"
 
-CUDA_VISIBLE_DEVICES=7 fairseq-train $dataset_dir \
-    --arch transformer_iwslt_${source_lang}_${target_lang} \
+cuda_visible_devices=7 fairseq-train $dataset_dir \
+    --arch transformer_wmt_${source_lang}_${target_lang} \
     --share-decoder-input-output-embed \
     --max-tokens 4096 \
-    attn_beta 0 \
-    attn_dropout 0.1 \
-    beam_size 4 \
-    beam_spread 3 \
-    emb_inp_device /cpu:0 \
-    emb_out_device /cpu:0 \
-    emb_size  512 \
-    ff_size 2048 \
-    hid_size 512 \
-    inp_emb_bias false \
-    label_smoothing 0.1 \
-    len_alpha 1.0 \
-    normalize_out true \
-    num_heads 8 \
-    num_layers 6 \
-    relu_dropout 0.1 \
-    replace true \
-    res_dropout 0.1 \
-    res_steps nlda \
-    rescale_emb true \
-    summarize_preactivations false \
-    --warmup-updates 16000 \
-    scale 0.0014 \
-    --optimizer adam --adam-betas '(0.9, 0.998)' --clip-norm 0 --adam-eps 1e-09
-
-
-
-
-
-    --lr 5e-4 \
-    --lr-scheduler inverse_sqrt \
-    --warmup-updates 4000 \
-    --dropout 0.3 \
-    --weight-decay 0.0001 \
-    --criterion label_smoothed_cross_entropy \
+    --attention-dropout 0.1 \
+    --encoder-embed-dim  512 --decoder-embed-dim 512 \
+    --encoder-ffn-embed-dim 2048 --decoder-ffn-embed-dim 2048 \
     --label-smoothing 0.1 \
+    --layernorm-embedding \
+    --encoder-normalize-before --decoder-normalize-before \
+    --encoder-attention-heads 8 --encoder-attention-heads 8 \
+    --encoder-layers 6 --decoder-layers 6 \
+    --relu_dropout 0.1 \
+    --dropout 0.1 \
+    --warmup-updates 16000 \
+    --optimizer adam --adam-betas '(0.9, 0.998)' --clip-norm 0 --adam-eps 1e-09
     --eval-bleu \
-    --eval-bleu-args '{"beam": 5, "max_len_a": 1.2, "max_len_b": 10}' \
+    --eval-bleu-args '{"beam": 4, "max_len_a": 1.2, "max_len_b": 10}' \
     --eval-bleu-detok moses \
     --eval-bleu-remove-bpe \
     --best-checkpoint-metric bleu \
@@ -176,5 +152,9 @@ CUDA_VISIBLE_DEVICES=7 fairseq-train $dataset_dir \
     --save-dir $checkpoints_dir \
     --save-interval 10 \
     --tensorboard-logdir $logs_dir
+    --lr 5e-4 \
+    --lr-scheduler inverse_sqrt \
+    --weight-decay 0.0001 \
+    --criterion label_smoothed_cross_entropy
 
 ##############################################################################################################
