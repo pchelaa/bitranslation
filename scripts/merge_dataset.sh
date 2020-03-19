@@ -6,12 +6,12 @@
 
 base_dir=/data/$USER/bidirectional_translation
 install_libs=false
-source_lang=en
-target_lang=fr
+source_lang=fren
+target_lang=enfr
 skip_download_files=false
 skip_preprocess_train_data=false
 skip_preprocess_test_data=false
-skip_split_dataset=false
+skip_merge_data=false
 skip_learn_bpe=false
 skip_fairseq_preprocess=false
 skip_remove_tmp_dirs=false
@@ -23,12 +23,14 @@ Options:\n
   --help\t\t\t\tPrint this message and exit\n
   --base_dir\t\t\tBase directory (default=$base_dir).\n
   --install-libs\t\t\tInstall libs (default=$install_libs).\n
+  --lang\t\t\t\tSource languages (required).\n
+  --token\t\t\t\tSpecial token (required).\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language(default=$target_lang).\n
   --skip-download-files\t\tSkip download files (default=$skip_download_files).\n
   --skip-preprocess-train-data\tSkip preprocess train data (default=$skip_preprocess_train_data).\n
   --skip-preprocess-test-data\tSkip preprocess test data (default=$skip_preprocess_test_data).\n
-  --skip-split-dataset\t\tSkip split dataset on train and valid (default=$skip_split_dataset).\n
+  --skip-merge-data\t\t\tSkip merge data (default=$skip_merge_data).\n
   --skip-learn-bpe\t\tSkip learn bpe (default=$skip_learn_bpe).\n
   --skip-fairseq-preprocess\tSkip fairseq preprocess (default=$skip_fairseq_preprocess).\n
   --skip-remove-tmp-dirs\t\tSkip remove temporary directories (default=$skip_remove_tmp_dirs).\n
@@ -43,6 +45,10 @@ while [ $# -gt 0 ]; do
             shift; base_dir="$1"; shift ;;
         --install-libs)
             shift; if [ "$1" == "true" ] || [ "$1" == "false" ]; then install_libs=$1; shift; else install_libs=true; fi ;;
+        --lang)
+            shift; langs="$langs $1"; shift ;;
+        --token)
+            shift; token="$1"; shift ;;
         --source-lang)
             shift; source_lang="$1"; shift ;;
         --target-lang)
@@ -53,8 +59,8 @@ while [ $# -gt 0 ]; do
             shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_preprocess_train_data=${1}; shift; else skip_preprocess_train_data=true; fi ;;
         --skip-preprocess-test-data)
             shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_preprocess_test_data=${1}; shift; else skip_preprocess_test_data=true; fi ;;
-        --skip-split-dataset)
-            shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_split_dataset=${1}; shift; else skip_split_dataset=true; fi ;;
+        --skip-merge-data)
+             shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_merge__data=${1};         shift; else skip_merge_data=true; fi ;;
         --skip-learn-bpe)
             shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_learn_bpe=${1}; shift; else skip_learn_bpe=true; fi ;;
         --skip-fairseq-preprocess)
@@ -163,6 +169,9 @@ CORPORA=(
     "training/news-commentary-v9.fr-en"
     "giga-fren.release2.fixed"
 )
+TESTS=(
+    "test-full/newstest2014-fren-src"
+)
 
 ############################################################################################################
 
@@ -197,24 +206,22 @@ if [ $skip_download_files == false ]; then
             elif [ ${file: -4} == ".tar" ]; then
                 tar xvf $file
             fi
-#           rm -f $file
         fi
     done
 
     gunzip giga-${target_lang}${source_lang}.release2.fixed.*.gz
 
+    mv \
+        test-full/newstest2014-${target_lang}${source_lang}-ref.${target_lang}.sgm \
+        test-full/newstest2014-${source_lang}${target_lang}-src.${target_lang}.sgm
+
     for l in $source_lang $target_lang; do
-        corpora_files="$orig_dir/test-full/newstest2014-fren-src.$l.sgm\|$corpora_files"
-        corpora_files="$orig_dir/test-full/newstest2014-fren-ref.$l.sgm\|$corpora_files"
         for f in "${CORPORA[@]}"; do
             awk '{if (NR%61 == 0)  print $0; }' $orig_dir/$f.$l > $orig_dir/$f.$l.filtered
             rm -f $orig_dir/$f.$l
             mv $orig_dir/$f.$l.filtered $orig_dir/$f.$l
-            corpora_files="$orig_dir/$f.$l\|$corpora_files"
         done
     done
-
-#    rm -r `find $orig_dir -type f | xargs readlink -f | grep -v "${corpora_files:0:-2}"`
 
     cd ..
 fi
@@ -225,7 +232,7 @@ if [ $skip_preprocess_train_data == false ]; then
     echo -e "\n--------------------------------------------------------------------------------------------"
     echo -e "$(date +"%D %T") Preprocessing train data\n"
 
-    for l in $source_lang $target_lang; do
+    for l in $langs; do
         rm -f  $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
 
         for f in "${CORPORA[@]}"; do
@@ -235,6 +242,11 @@ if [ $skip_preprocess_train_data == false ]; then
                 perl $TOKENIZER -threads 16 -a -l $l >> $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
         done
     done
+
+    for l in $langs; do
+        awk '{if (NR%23 == 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/valid.$l
+        awk '{if (NR%23 != 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/train.$l
+    done
 fi
 
 ############################################################################################################
@@ -243,30 +255,42 @@ if [ $skip_preprocess_test_data == false ]; then
     echo -e "\n--------------------------------------------------------------------------------------------"
     echo -e "$(date +"%D %T") Preprocessing test data\n"
 
-    for l in $source_lang $target_lang; do
-        if [ "$l" == "$source_lang" ]; then
-            t="src"
-        else
-            t="ref"
-        fi
-        grep '<seg id' $orig_dir/test-full/newstest2014-fren-$t.$l.sgm | \
-            sed -e 's/<seg id="[0-9]*">\s*//g' | \
-            sed -e 's/\s*<\/seg>\s*//g' | \
-            sed -e "s/\’/\'/g" | \
-        perl $TOKENIZER -threads 16 -a -l $l > $tmp_dir/test.$l
-        echo ""
+    for l in $langs; do
+        rm -f $tmp_dir/test.$l
+
+        for f in "${TESTS[@]}"; do
+            grep '<seg id' $orig_dir/$f-src.$l.sgm | \
+                sed -e 's/<seg id="[0-9]*">\s*//g' | \
+                sed -e 's/\s*<\/seg>\s*//g' | \
+                sed -e "s/\’/\'/g" | \
+            perl $TOKENIZER -threads 16 -a -l $l >> $tmp_dir/test.$l
+            echo ""
+        done
     done
 fi
 
 ############################################################################################################
 
-if [ $skip_split_dataset == false ]; then
+if [ $skip_merge_data == false ]; then
     echo -e "\n--------------------------------------------------------------------------------------------"
-    echo -e "$(date +"%D %T") Splitting train and valid\n"
+    echo -e "$(date +"%D %T") Merging data\n"
 
-    for l in $source_lang $target_lang; do
-        awk '{if (NR%23 == 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/valid.$l
-        awk '{if (NR%23 != 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/train.$l
+    rm -f $tmp_dir/$f.$source_lang
+    for f in train valid test; do
+        for L in $langs; do
+             awk '{if ($L == fr)  print "$token $0"; }' $tmp_dir/$f.$L >> $tmp_dir/$f.$source_lang
+        done
+    done
+
+    for  L in $langs; do
+        reversed_langs="$L $reversed_langs"
+    done
+
+    rm -f $tmp_dir/$f.$source_lang
+    for f in train valid test; do
+        for L in $reversed_langs; do
+             awk '{if ($L == fr)  print "$token $0"; }' $tmp_dir/$f.$L >> $tmp_dir/$f.$target_lang
+        done
     done
 fi
 
