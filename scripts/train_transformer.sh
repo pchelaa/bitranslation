@@ -155,11 +155,12 @@ fairseq-train $dataset_dir \
     --best-checkpoint-metric bleu \
     --maximize-best-checkpoint-metric \
     --save-dir $checkpoints_dir \
-    --save-interval 10 \
+    --save-interval 1 \
     --tensorboard-logdir $logs_dir \
     --lr 5e-4 \
     --lr-scheduler inverse_sqrt \
     --weight-decay 0.0001 \
-    --criterion label_smoothed_cross_entropy
+    --criterion label_smoothed_cross_entropy \
+    --valid-subset valid,test
 
 ##############################################################################################################
