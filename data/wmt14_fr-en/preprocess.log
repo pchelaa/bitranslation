@@ -1,0 +1,14 @@
+Namespace(align_suffix=None, alignfile=None, all_gather_list_size=16384, bpe=None, cpu=False, criterion='cross_entropy', dataset_impl='mmap', destdir='/data/anjukirkov/bidirectional_translation/data/wmt14_fr-en', empty_cache_freq=0, fp16=False, fp16_init_scale=128, fp16_no_flatten_grads=False, fp16_scale_tolerance=0.0, fp16_scale_window=None, joined_dictionary=False, log_format=None, log_interval=100, lr_scheduler='fixed', memory_efficient_fp16=False, min_loss_scale=0.0001, no_progress_bar=False, nwordssrc=-1, nwordstgt=-1, only_source=False, optimizer='nag', padding_factor=8, seed=1, source_lang='fr', srcdict=None, target_lang='en', task='translation', tensorboard_logdir='', testpref='/data/anjukirkov/bidirectional_translation/data/wmt14_fr-en/prep/test', tgtdict=None, threshold_loss_scale=None, thresholdsrc=0, thresholdtgt=0, tokenizer=None, trainpref='/data/anjukirkov/bidirectional_translation/data/wmt14_fr-en/prep/train', user_dir=None, validpref='/data/anjukirkov/bidirectional_translation/data/wmt14_fr-en/prep/valid', workers=1)
+[fr] Dictionary: 4551 types
+[fr] /data/anjukirkov/bidirectional_translation/data/wmt14_fr-en/prep/train.fr: 263225 sents, 12413459 tokens, 0.0% replaced by <unk>
+[fr] Dictionary: 4551 types
+[fr] /data/anjukirkov/bidirectional_translation/data/wmt14_fr-en/prep/valid.fr: 12051 sents, 571697 tokens, 0.0014% replaced by <unk>
+[fr] Dictionary: 4551 types
+[fr] /data/anjukirkov/bidirectional_translation/data/wmt14_fr-en/prep/test.fr: 3003 sents, 135213 tokens, 0.564% replaced by <unk>
+[en] Dictionary: 4351 types
+[en] /data/anjukirkov/bidirectional_translation/data/wmt14_fr-en/prep/train.en: 263225 sents, 11271280 tokens, 0.0% replaced by <unk>
+[en] Dictionary: 4351 types
+[en] /data/anjukirkov/bidirectional_translation/data/wmt14_fr-en/prep/valid.en: 12051 sents, 518982 tokens, 0.0027% replaced by <unk>
+[en] Dictionary: 4351 types
+[en] /data/anjukirkov/bidirectional_translation/data/wmt14_fr-en/prep/test.en: 3003 sents, 122151 tokens, 0.00491% replaced by <unk>
+Wrote preprocessed data to /data/anjukirkov/bidirectional_translation/data/wmt14_fr-en
