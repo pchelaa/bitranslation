@@ -10,6 +10,7 @@ run_tensorboard=false
 source_lang=en
 target_lang=fr
 device_id=0
+port=6006
 
 ##############################################################################################################
 
@@ -23,6 +24,7 @@ Options:\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language (default=$target_lang).\n
   --device-id\t\t\tCuda device ID (default=$device_id).\n
+  --port\t\t\t\tTensorboard port (default=$port).\n
 ";
 
 ##############################################################################################################
@@ -44,6 +46,8 @@ while [ $# -gt 0 ]; do
             shift; target_lang="$1"; shift ;;
         --device-id)
             shift; device_id="$1"; shift ;;
+        --port)
+            shift; port="$1"; shift ;;
         -*)  echo "Unknown argument: $1, exiting"; echo -e $usage; exit 1 ;;
         *)   break ;;   # end of options: interpreted as num-leaves
     esac
@@ -120,6 +124,7 @@ if [ $run_tensorboard == true ]; then
 
     tensorboard \
         --logdir $logs_dir \
+        --port $port \
         --bind_all \
         &
 
