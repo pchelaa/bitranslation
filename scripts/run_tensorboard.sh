@@ -67,8 +67,7 @@ echo -e "$(date +"%D %T") Running tensorboard\n"
 tensorboard \
     --logdir $logs_dir/$dataset \
     --port $port \
-    --bind_all \
-    &
+    --bind_all
 
 ##############################################################################################################
 

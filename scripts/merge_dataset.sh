@@ -6,15 +6,16 @@
 
 base_dir=/data/$USER/courses/bt
 install_libs=false
-source_lang=fren
-target_lang=enfr
+source_lang=enfr
+target_lang=fren
 skip_download_files=false
 skip_preprocess_train_data=false
 skip_preprocess_test_data=false
 skip_merge_data=false
 skip_learn_bpe=false
 skip_fairseq_preprocess=false
-skip_remove_tmp_dirs=false
+skip_remove_tmp_dirs=true
+
 
 ############################################################################################################
 
@@ -24,13 +25,13 @@ Options:\n
   --base_dir\t\t\tBase directory (default=$base_dir).\n
   --install-libs\t\t\tInstall libs (default=$install_libs).\n
   --lang\t\t\t\tSource languages (required).\n
-  --token\t\t\t\tSpecial token (required).\n
+  --token\t\t\tSpecial token (required).\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language(default=$target_lang).\n
   --skip-download-files\t\tSkip download files (default=$skip_download_files).\n
   --skip-preprocess-train-data\tSkip preprocess train data (default=$skip_preprocess_train_data).\n
   --skip-preprocess-test-data\tSkip preprocess test data (default=$skip_preprocess_test_data).\n
-  --skip-merge-data\t\t\tSkip merge data (default=$skip_merge_data).\n
+  --skip-merge-data\t\tSkip merge data (default=$skip_merge_data).\n
   --skip-learn-bpe\t\tSkip learn bpe (default=$skip_learn_bpe).\n
   --skip-fairseq-preprocess\tSkip fairseq preprocess (default=$skip_fairseq_preprocess).\n
   --skip-remove-tmp-dirs\t\tSkip remove temporary directories (default=$skip_remove_tmp_dirs).\n

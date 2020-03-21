@@ -6,11 +6,13 @@ current_dir="$(cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)"
 base_dir=/data/$USER/courses/bt
 install_libs=false
 prepare_dataset=false
+merge_dataset=false
+clean_checkpoints=false
 run_tensorboard=false
+tensorboard_port=6006
 source_lang=en
 target_lang=fr
 device_id=0
-port=6006
 
 ##############################################################################################################
 
@@ -20,11 +22,13 @@ Options:\n
   --base_dir\t\t\tBase directory (default=$base_dir).\n
   --install-libs\t\t\tInstall libs (default=$install_libs).\n
   --prepare-dataset\t\tPrepare dataset (default=$prepare_dataset).\n
+  --merge-dataset\t\tCreate merged dataset (default=$merge_dataset).\n
+  --clean-checkpoints\tClean checkpoints (default=$clean_checkpoints).\n
   --run-tensorboard\t\tRun tensorboard (default=$run_tensorboard).\n
+  --tensorboard-port\t\t\t\tTensorboard port (default=$tensorboard_port).\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language (default=$target_lang).\n
   --device-id\t\t\tCuda device ID (default=$device_id).\n
-  --port\t\t\t\tTensorboard port (default=$port).\n
 ";
 
 ##############################################################################################################
@@ -38,16 +42,20 @@ while [ $# -gt 0 ]; do
             shift; if [ "$1" == "true" ] || [ "$1" == "false" ]; then install_libs=$1; shift; else install_libs=true; fi ;;
         --prepare-dataset)
             shift; if [ "$1" == "true" ] || [ "$1" == "false" ]; then prepare_dataset=$1; shift; else prepare_dataset=true; fi ;;
+        --merge-dataset)
+            shift; if [ "${1}" == "true" ] || [ "${1}" == "false" ]; then merge_dataset=${1}; shift; else merge_dataset=true; fi ;;
+        --clean-checkpoints)
+            shift; if [ "${1}" == "true" ] || [ "${1}" == "false"  ]; then clean_checkpoints=${1}; shift; else clean_checkpoints=true; fi ;;
         --run-tensorboard)
             shift; if [ "$1" == "true" ] || [ "$1" == "false" ]; then run_tensorboard=$1; shift; else run_tensorboard=true; fi ;;
+        --tensorboard-port)
+            shift; tensorboard_port="$1"; shift ;;
         --source-lang)
             shift; source_lang="$1"; shift ;;
         --target-lang)
             shift; target_lang="$1"; shift ;;
         --device-id)
             shift; device_id="$1"; shift ;;
-        --port)
-            shift; port="$1"; shift ;;
         -*)  echo "Unknown argument: $1, exiting"; echo -e $usage; exit 1 ;;
         *)   break ;;   # end of options: interpreted as num-leaves
     esac
@@ -81,13 +89,19 @@ if [ ! -d "$checkpoints_dir" ]; then
     mkdir $checkpoints_dir
 fi
 
-if [ ! -d "$logs_dir/$dataset"    ]; then
-    mkdir $logs_dir/$dataset
-fi
-
 if [ ! -d "$checkpoints_dir/$dataset"  ]; then
     mkdir $checkpoints_dir/$dataset
 fi
+
+##############################################################################################################
+
+if [ $clean_checkpoints == true ]; then
+    echo -e "\n----------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Downloading fairseq\n"
+
+    rm -r $checkpoints_dir/$dataset/*
+fi
+
 
 ##############################################################################################################
 
@@ -127,13 +141,27 @@ fi
 
 ##############################################################################################################
 
+if [ $merge_dataset == true ]; then
+    echo -e "\n----------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Creating merged dataset\n"
+
+    bash $current_dir/merge_dataset.sh \
+        --base-dir $base_dir \
+        --lang en --lang fr \
+        --token @@@@ \
+        --source-lang $source_lang \
+        --target-lang $target_lang
+fi
+
+##############################################################################################################
+
 if [ $run_tensorboard == true ]; then
     echo -e "\n----------------------------------------------------------------------------------------------"
     echo -e "$(date +"%D %T") Running tensorboard\n"
 
     tensorboard \
         --logdir $logs_dir/$dataset \
-        --port $port \
+        --port $tensorboard_port \
         --bind_all \
         &
 
