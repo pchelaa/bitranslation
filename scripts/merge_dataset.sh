@@ -76,10 +76,10 @@ done
 
 data_dir=$base_dir/data
 libs_dir=$base_dir/libs
-dataset_dir=$base_dir/data/wmt14_$source_lang-$target_lang
-prep_dir=$dataset_dir/prep
-tmp_dir=$dataset_dir/tmp
-orig_dir=$dataset_dir/orig
+dataset_dir=$data_dir/wmt14_$source_lang-$target_lang
+prep_dir=$data_dir/prep
+tmp_dir=$data_dir/tmp
+orig_dir=$data_dir/orig
 fairseq_dir=$libs_dir/fairseq
 mosesdecoder_dir=$libs_dir/mosesdecoder
 subword_nmt_dir=$libs_dir/subword-nmt
