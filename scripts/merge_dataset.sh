@@ -4,7 +4,7 @@
 
 ############################################################################################################
 
-base_dir=/data/$USER/bidirectional_translation
+base_dir=/data/$USER/courses/bt
 install_libs=false
 source_lang=fren
 target_lang=enfr

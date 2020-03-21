@@ -3,7 +3,7 @@
 ##############################################################################################################
 
 current_dir="$(cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P)"
-base_dir=/data/$USER/bidirectional_translation
+base_dir=/data/$USER/courses/bt
 install_libs=false
 prepare_dataset=false
 run_tensorboard=false
