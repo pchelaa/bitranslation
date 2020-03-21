@@ -1,0 +1,14 @@
+Namespace(align_suffix=None, alignfile=None, all_gather_list_size=16384, bpe=None, cpu=False, criterion='cross_entropy', dataset_impl='mmap', destdir='/data/anjukirkov/courses/bt/data/wmt14_enfr-fren', empty_cache_freq=0, fp16=False, fp16_init_scale=128, fp16_no_flatten_grads=False, fp16_scale_tolerance=0.0, fp16_scale_window=None, joined_dictionary=False, log_format=None, log_interval=100, lr_scheduler='fixed', memory_efficient_fp16=False, min_loss_scale=0.0001, no_progress_bar=False, nwordssrc=-1, nwordstgt=-1, only_source=False, optimizer='nag', padding_factor=8, seed=1, source_lang='enfr', srcdict=None, target_lang='fren', task='translation', tensorboard_logdir='', testpref='/data/anjukirkov/courses/bt/data/prep/test', tgtdict=None, threshold_loss_scale=None, thresholdsrc=0, thresholdtgt=0, tokenizer=None, trainpref='/data/anjukirkov/courses/bt/data/prep/train', user_dir=None, validpref='/data/anjukirkov/courses/bt/data/prep/valid', workers=1)
+[enfr] Dictionary: 4783 types
+[enfr] /data/anjukirkov/courses/bt/data/prep/train.enfr: 518530 sents, 23785685 tokens, 0.0% replaced by <unk>
+[enfr] Dictionary: 4783 types
+[enfr] /data/anjukirkov/courses/bt/data/prep/valid.enfr: 23662 sents, 1092697 tokens, 0.00119% replaced by <unk>
+[enfr] Dictionary: 4783 types
+[enfr] /data/anjukirkov/courses/bt/data/prep/test.enfr: 6006 sents, 260381 tokens, 0.293% replaced by <unk>
+[fren] Dictionary: 4783 types
+[fren] /data/anjukirkov/courses/bt/data/prep/train.fren: 518530 sents, 23785685 tokens, 0.0% replaced by <unk>
+[fren] Dictionary: 4783 types
+[fren] /data/anjukirkov/courses/bt/data/prep/valid.fren: 23662 sents, 1092697 tokens, 0.00119% replaced by <unk>
+[fren] Dictionary: 4783 types
+[fren] /data/anjukirkov/courses/bt/data/prep/test.fren: 6006 sents, 260381 tokens, 0.293% replaced by <unk>
+Wrote preprocessed data to /data/anjukirkov/courses/bt/data/wmt14_enfr-fren
