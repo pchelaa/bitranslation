@@ -170,7 +170,7 @@ CORPORA=(
     "giga-fren.release2.fixed"
 )
 TESTS=(
-    "test-full/newstest2014-fren-src"
+    "test-full/newstest2014-fren"
 )
 
 ############################################################################################################
@@ -201,21 +201,21 @@ if [ $skip_download_files == false ]; then
                 echo "$url not successfully downloaded."
                 exit -1
             fi
-            if [ ${file: -4} == ".tgz" ]; then
-                tar zxvf $file
-            elif [ ${file: -4} == ".tar" ]; then
-                tar xvf $file
-            fi
+        fi
+
+        if [ ${file: -4} == ".tgz"  ]; then
+            tar zxvf $file
+        elif [ ${file: -4} == ".tar"  ]; then
+            tar xvf $file
         fi
     done
 
-    gunzip giga-${target_lang}${source_lang}.release2.fixed.*.gz
+    gunzip giga-fren.release2.fixed.*.gz
 
-    mv \
-        test-full/newstest2014-${target_lang}${source_lang}-ref.${target_lang}.sgm \
-        test-full/newstest2014-${source_lang}${target_lang}-src.${target_lang}.sgm
+    mv test-full/newstest2014-fren-src.en.sgm test-full/newstest2014-fren.en.sgm
+    mv test-full/newstest2014-fren-ref.fr.sgm test-full/newstest2014-fren.fr.sgm
 
-    for l in $source_lang $target_lang; do
+    for l in $langs; do
         for f in "${CORPORA[@]}"; do
             awk '{if (NR%61 == 0)  print $0; }' $orig_dir/$f.$l > $orig_dir/$f.$l.filtered
             rm -f $orig_dir/$f.$l
@@ -233,19 +233,19 @@ if [ $skip_preprocess_train_data == false ]; then
     echo -e "$(date +"%D %T") Preprocessing train data\n"
 
     for l in $langs; do
-        rm -f  $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
+        rm -f  $tmp_dir/train.tags.en-fr.tok.$l
 
         for f in "${CORPORA[@]}"; do
             cat $orig_dir/$f.$l | \
                 perl $NORM_PUNC $l | \
                 perl $REM_NON_PRINT_CHAR | \
-                perl $TOKENIZER -threads 16 -a -l $l >> $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
+                perl $TOKENIZER -threads 16 -a -l $l >> $tmp_dir/train.tags.en-fr.tok.$l
         done
     done
 
     for l in $langs; do
-        awk '{if (NR%23 == 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/valid.$l
-        awk '{if (NR%23 != 0)  print $0; }' $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l > $tmp_dir/train.$l
+        awk '{if (NR%23 == 0)  print $0; }' $tmp_dir/train.tags.en-fr.tok.$l > $tmp_dir/valid.$l
+        awk '{if (NR%23 != 0)  print $0; }' $tmp_dir/train.tags.en-fr.tok.$l > $tmp_dir/train.$l
     done
 fi
 
@@ -259,7 +259,7 @@ if [ $skip_preprocess_test_data == false ]; then
         rm -f $tmp_dir/test.$l
 
         for f in "${TESTS[@]}"; do
-            grep '<seg id' $orig_dir/$f-src.$l.sgm | \
+            grep '<seg id' $orig_dir/$f.$l.sgm | \
                 sed -e 's/<seg id="[0-9]*">\s*//g' | \
                 sed -e 's/\s*<\/seg>\s*//g' | \
                 sed -e "s/\’/\'/g" | \
@@ -275,10 +275,14 @@ if [ $skip_merge_data == false ]; then
     echo -e "\n--------------------------------------------------------------------------------------------"
     echo -e "$(date +"%D %T") Merging data\n"
 
-    rm -f $tmp_dir/$f.$source_lang
     for f in train valid test; do
+        rm -f $tmp_dir/$f.$source_lang
         for L in $langs; do
-             awk '{if ($L == fr)  print "$token $0"; }' $tmp_dir/$f.$L >> $tmp_dir/$f.$source_lang
+            if [ $L == fr ]; then
+                 awk -v token=$token '{ print token" "$0; }' $tmp_dir/$f.$L >> $tmp_dir/$f.$source_lang
+            else
+                awk '{ print $0; }' $tmp_dir/$f.$L >> $tmp_dir/$f.$source_lang
+            fi
         done
     done
 
@@ -286,10 +290,14 @@ if [ $skip_merge_data == false ]; then
         reversed_langs="$L $reversed_langs"
     done
 
-    rm -f $tmp_dir/$f.$source_lang
     for f in train valid test; do
+        rm -f $tmp_dir/$f.$target_lang
         for L in $reversed_langs; do
-             awk '{if ($L == fr)  print "$token $0"; }' $tmp_dir/$f.$L >> $tmp_dir/$f.$target_lang
+            if [ $L == fr  ]; then
+                awk -v token=$token '{print token" "$0; }' $tmp_dir/$f.$L >> $tmp_dir/$f.$target_lang
+            else
+                awk '{print $0; }' $tmp_dir/$f.$L >> $tmp_dir/$f.$target_lang
+            fi
         done
     done
 fi

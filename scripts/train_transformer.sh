@@ -57,9 +57,10 @@ done
 
 data_dir=$base_dir/data
 libs_dir=$base_dir/libs
-logs_dir=$base_dir/logs
 fairseq_dir=$libs_dir/fairseq
-dataset_dir=$base_dir/data/wmt14_${source_lang}-${target_lang}
+dataset=wmt14_${source_lang}-${target_lang}
+dataset_dir=$base_dir/data/$dataset
+logs_dir=$base_dir/logs
 checkpoints_dir=$base_dir/checkpoints
 
 ##############################################################################################################
@@ -72,12 +73,20 @@ if [ ! -d "$libs_dir" ]; then
     mkdir $libs_dir
 fi
 
+if [ ! -d "$logs_dir"   ]; then
+    mkdir $logs_dir
+fi
+
 if [ ! -d "$checkpoints_dir" ]; then
     mkdir $checkpoints_dir
 fi
 
-if [ ! -d "$logs_dir"  ]; then
-    mkdir $logs_dir
+if [ ! -d "$logs_dir/$dataset"    ]; then
+    mkdir $logs_dir/$dataset
+fi
+
+if [ ! -d "$checkpoints_dir/$dataset"  ]; then
+    mkdir $checkpoints_dir/$dataset
 fi
 
 ##############################################################################################################
@@ -123,7 +132,7 @@ if [ $run_tensorboard == true ]; then
     echo -e "$(date +"%D %T") Running tensorboard\n"
 
     tensorboard \
-        --logdir $logs_dir \
+        --logdir $logs_dir/$dataset \
         --port $port \
         --bind_all \
         &
@@ -136,7 +145,7 @@ fi
 echo -e "\n----------------------------------------------------------------------------------------------"
 echo -e "$(date +"%D %T") Training transformer\n"
 
-CUDA_VISIBLE_DEVICES=$device_id
+export CUDA_VISIBLE_DEVICES=$device_id
 
 fairseq-train $dataset_dir \
     --arch transformer \
@@ -159,9 +168,9 @@ fairseq-train $dataset_dir \
     --eval-bleu-remove-bpe \
     --best-checkpoint-metric bleu \
     --maximize-best-checkpoint-metric \
-    --save-dir $checkpoints_dir \
+    --save-dir $checkpoints_dir/$dataset \
     --save-interval 1 \
-    --tensorboard-logdir $logs_dir \
+    --tensorboard-logdir $logs_dir/$dataset \
     --lr 5e-4 \
     --lr-scheduler inverse_sqrt \
     --weight-decay 0.0001 \
