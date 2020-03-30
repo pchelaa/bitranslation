@@ -12,6 +12,7 @@ run_tensorboard=false
 tensorboard_port=6006
 source_lang=en
 target_lang=fr
+valid_subset=valid,test
 device_id=0
 
 ##############################################################################################################
@@ -23,11 +24,12 @@ Options:\n
   --install-libs\t\t\tInstall libs (default=$install_libs).\n
   --prepare-dataset\t\tPrepare dataset (default=$prepare_dataset).\n
   --merge-dataset\t\tCreate merged dataset (default=$merge_dataset).\n
-  --clean-checkpoints\tClean checkpoints (default=$clean_checkpoints).\n
+  --clean-checkpoints\t\tClean checkpoints (default=$clean_checkpoints).\n
   --run-tensorboard\t\tRun tensorboard (default=$run_tensorboard).\n
-  --tensorboard-port\t\t\t\tTensorboard port (default=$tensorboard_port).\n
+  --tensorboard-port\t\tTensorboard port (default=$tensorboard_port).\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language (default=$target_lang).\n
+  --valid-subset\t\t\tValid subset (default=$valid_subset).\n
   --device-id\t\t\tCuda device ID (default=$device_id).\n
 ";
 
@@ -54,6 +56,8 @@ while [ $# -gt 0 ]; do
             shift; source_lang="$1"; shift ;;
         --target-lang)
             shift; target_lang="$1"; shift ;;
+        --valid-subset)
+            shift; valid_subset="$1"; shift ;;
         --device-id)
             shift; device_id="$1"; shift ;;
         -*)  echo "Unknown argument: $1, exiting"; echo -e $usage; exit 1 ;;
@@ -83,6 +87,10 @@ fi
 
 if [ ! -d "$logs_dir"   ]; then
     mkdir $logs_dir
+fi
+
+if [ ! -d "$logs_dir/$dataset"   ]; then
+    mkdir $logs_dir/$dataset
 fi
 
 if [ ! -d "$checkpoints_dir" ]; then
@@ -160,7 +168,7 @@ if [ $run_tensorboard == true ]; then
     echo -e "$(date +"%D %T") Running tensorboard\n"
 
     tensorboard \
-        --logdir $logs_dir/$dataset \
+        --logdir $logs_dir \
         --port $tensorboard_port \
         --bind_all \
         &
@@ -203,6 +211,6 @@ fairseq-train $dataset_dir \
     --lr-scheduler inverse_sqrt \
     --weight-decay 0.0001 \
     --criterion label_smoothed_cross_entropy \
-    --valid-subset valid,test
+    --valid-subset $valid_subset
 
 ##############################################################################################################

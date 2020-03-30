@@ -9,12 +9,13 @@ install_libs=false
 source_lang=enfr
 target_lang=fren
 skip_download_files=false
+skip_unpack_files=false
 skip_preprocess_train_data=false
 skip_preprocess_test_data=false
 skip_merge_data=false
 skip_learn_bpe=false
 skip_fairseq_preprocess=false
-skip_remove_tmp_dirs=true
+skip_remove_tmp_dirs=false
 
 
 ############################################################################################################
@@ -29,6 +30,7 @@ Options:\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language(default=$target_lang).\n
   --skip-download-files\t\tSkip download files (default=$skip_download_files).\n
+  --skip-unpack-files\t\tSkip unpack files (default=$skip_unpack_files).\n
   --skip-preprocess-train-data\tSkip preprocess train data (default=$skip_preprocess_train_data).\n
   --skip-preprocess-test-data\tSkip preprocess test data (default=$skip_preprocess_test_data).\n
   --skip-merge-data\t\tSkip merge data (default=$skip_merge_data).\n
@@ -56,6 +58,8 @@ while [ $# -gt 0 ]; do
             shift; target_lang="$1"; shift ;;
         --skip-download-files)
             shift; if [ "${1}" == "true" ] || [ "${1}" == "false" ]; then skip_download_files=${1}; shift; else skip_download_files=true; fi ;;
+        --skip-unpack-files)
+            shift; if [ "${1}" == "true" ] || [ "${1}" == "false" ]; then skip_unpack_files=${1}; shift; else  skip_unpack_files=true; fi ;;
         --skip-preprocess-train-data)
             shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_preprocess_train_data=${1}; shift; else skip_preprocess_train_data=true; fi ;;
         --skip-preprocess-test-data)
@@ -77,10 +81,12 @@ done
 
 data_dir=$base_dir/data
 libs_dir=$base_dir/libs
-dataset_dir=$data_dir/wmt14_$source_lang-$target_lang
-prep_dir=$data_dir/prep
-tmp_dir=$data_dir/tmp
 orig_dir=$data_dir/orig
+dataset_dir=$data_dir/wmt14_$source_lang-$target_lang
+prep_dir=$dataset_dir/prep
+src_dir=$dataset_dir/src
+merged_dir=$dataset_dir/merged
+tmp_dir=$dataset_dir/tmp
 fairseq_dir=$libs_dir/fairseq
 mosesdecoder_dir=$libs_dir/mosesdecoder
 subword_nmt_dir=$libs_dir/subword-nmt
@@ -99,7 +105,11 @@ if [ ! -d "$data_dir" ]; then
     mkdir $data_dir
 fi
 
-mkdir -p $orig_dir $tmp_dir $prep_dir $dataset_dir
+if [ -d "$dataset_dir" ]; then
+    rm -r $dataset_dir
+fi
+
+mkdir -p $orig_dir $src_dir $tmp_dir $prep_dir $merged_dir $dataset_dir
 
 ############################################################################################################
 
@@ -145,7 +155,7 @@ CLEAN=$SCRIPTS/training/clean-corpus-n.perl
 NORM_PUNC=$SCRIPTS/tokenizer/normalize-punctuation.perl
 REM_NON_PRINT_CHAR=$SCRIPTS/tokenizer/remove-non-printing-char.perl
 BPEROOT=$subword_nmt_dir/subword_nmt
-BPE_TOKENS=4000
+BPE_TOKENS=6000
 
 URLS=(
     "http://statmt.org/wmt13/training-parallel-europarl-v7.tgz"
@@ -203,29 +213,41 @@ if [ $skip_download_files == false ]; then
                 exit -1
             fi
         fi
-
-        if [ ${file: -4} == ".tgz"  ]; then
-            tar zxvf $file
-        elif [ ${file: -4} == ".tar"  ]; then
-            tar xvf $file
-        fi
-    done
-
-    gunzip giga-fren.release2.fixed.*.gz
-
-    mv test-full/newstest2014-fren-src.en.sgm test-full/newstest2014-fren.en.sgm
-    mv test-full/newstest2014-fren-ref.fr.sgm test-full/newstest2014-fren.fr.sgm
-
-    for l in $langs; do
-        for f in "${CORPORA[@]}"; do
-            awk '{if (NR%61 == 0)  print $0; }' $orig_dir/$f.$l > $orig_dir/$f.$l.filtered
-            rm -f $orig_dir/$f.$l
-            mv $orig_dir/$f.$l.filtered $orig_dir/$f.$l
-        done
     done
 
     cd ..
 fi
+
+############################################################################################################
+
+if [ $skip_unpack_files == false ]; then
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Unpacking files\n"
+
+    for ((i=0;i<${#URLS[@]};++i)); do
+        file=$orig_dir/${FILES[i]}
+
+        if [ ${file: -4} == ".tgz"  ]; then
+            tar zxvf $file --directory $src_dir
+        elif [ ${file: -4} == ".tar"  ]; then
+            tar xvf $file --directory $src_dir
+        fi
+    done
+
+    gunzip $src_dir/giga-fren.release2.fixed.*.gz
+
+    mv $src_dir/test-full/newstest2014-fren-src.en.sgm $src_dir/test-full/newstest2014-fren.en.sgm
+    mv $src_dir/test-full/newstest2014-fren-ref.fr.sgm $src_dir/test-full/newstest2014-fren.fr.sgm
+
+    for l in $langs; do
+        for f in "${CORPORA[@]}"; do
+            awk '{if (NR%62 == 0)  print $0; }' $src_dir/$f.$l > $src_dir/$f.$l.filtered
+            rm -f $src_dir/$f.$l
+            mv $src_dir/$f.$l.filtered $src_dir/$f.$l
+        done
+    done
+fi
+
 
 ############################################################################################################
 
@@ -237,7 +259,7 @@ if [ $skip_preprocess_train_data == false ]; then
         rm -f  $tmp_dir/train.tags.en-fr.tok.$l
 
         for f in "${CORPORA[@]}"; do
-            cat $orig_dir/$f.$l | \
+            cat $src_dir/$f.$l | \
                 perl $NORM_PUNC $l | \
                 perl $REM_NON_PRINT_CHAR | \
                 perl $TOKENIZER -threads 16 -a -l $l >> $tmp_dir/train.tags.en-fr.tok.$l
@@ -260,7 +282,7 @@ if [ $skip_preprocess_test_data == false ]; then
         rm -f $tmp_dir/test.$l
 
         for f in "${TESTS[@]}"; do
-            grep '<seg id' $orig_dir/$f.$l.sgm | \
+            grep '<seg id' $src_dir/$f.$l.sgm | \
                 sed -e 's/<seg id="[0-9]*">\s*//g' | \
                 sed -e 's/\s*<\/seg>\s*//g' | \
                 sed -e "s/\’/\'/g" | \
@@ -276,13 +298,13 @@ if [ $skip_merge_data == false ]; then
     echo -e "\n--------------------------------------------------------------------------------------------"
     echo -e "$(date +"%D %T") Merging data\n"
 
-    for f in train valid test; do
-        rm -f $tmp_dir/$f.$source_lang
+    for f in train valid; do
+        rm -f $merged_dir/$f.$source_lang
         for L in $langs; do
-            if [ $L == fr ]; then
-                 awk -v token=$token '{ print token" "$0; }' $tmp_dir/$f.$L >> $tmp_dir/$f.$source_lang
+            if [ $L == fr ] && [ ! -z "$token" ]; then
+                awk -v token=$token '{ print token" "$0; }' $tmp_dir/$f.$L >> $merged_dir/$f.$source_lang
             else
-                awk '{ print $0; }' $tmp_dir/$f.$L >> $tmp_dir/$f.$source_lang
+                awk '{ print $0; }' $tmp_dir/$f.$L >> $merged_dir/$f.$source_lang
             fi
         done
     done
@@ -291,16 +313,30 @@ if [ $skip_merge_data == false ]; then
         reversed_langs="$L $reversed_langs"
     done
 
-    for f in train valid test; do
-        rm -f $tmp_dir/$f.$target_lang
+    for f in train valid; do
+        rm -f $merged_dir/$f.$target_lang
         for L in $reversed_langs; do
-            if [ $L == fr  ]; then
-                awk -v token=$token '{print token" "$0; }' $tmp_dir/$f.$L >> $tmp_dir/$f.$target_lang
+            if [ $L == fr  ] && [ ! -z "$token" ]; then
+                awk -v token=$token '{print token" "$0; }' $tmp_dir/$f.$L >> $merged_dir/$f.$target_lang
             else
-                awk '{print $0; }' $tmp_dir/$f.$L >> $tmp_dir/$f.$target_lang
+                awk '{print $0; }' $tmp_dir/$f.$L >> $merged_dir/$f.$target_lang
             fi
         done
     done
+
+    if  [ ! -z "$token" ]; then
+        awk -v token=$token '{ print token" "$0; }' $tmp_dir/test.fr >> $merged_dir/fr-en.$source_lang
+    else
+        awk '{ print $0; }' $tmp_dir/test.fr >> $merged_dir/fr-en.$source_lang
+    fi
+    awk '{ print $0; }' $tmp_dir/test.en >> $merged_dir/fr-en.$target_lang
+
+    awk '{ print $0; }' $tmp_dir/test.en >> $merged_dir/en-fr.$source_lang
+    if  [ ! -z "$token" ]; then
+        awk -v token=$token '{ print token" "$0; }' $tmp_dir/test.fr >> $merged_dir/en-fr.$target_lang
+    else
+        awk '{ print $0; }' $tmp_dir/test.fr >> $merged_dir/en-fr.$target_lang
+    fi
 fi
 
 ############################################################################################################
@@ -309,27 +345,28 @@ if [ $skip_learn_bpe == false ]; then
     echo -e "\n--------------------------------------------------------------------------------------------"
     echo -e "$(date +"%D %T") Learning bpe\n"
 
-    TRAIN=$tmp_dir/train.$source_lang-$target_lang
+    TRAIN=$merged_dir/train.$source_lang-$target_lang
     BPE_CODE=$prep_dir/code
     rm -f $TRAIN
     for l in $source_lang $target_lang; do
-       cat $tmp_dir/train.$l >> $TRAIN
+       cat $merged_dir/train.$l >> $TRAIN
     done
 
     python $BPEROOT/learn_bpe.py -s $BPE_TOKENS < $TRAIN > $BPE_CODE
 
     for L in $source_lang $target_lang; do
-        for f in train.$L valid.$L test.$L; do
+        for f in train.$L valid.$L en-fr.$L fr-en.$L; do
             echo "apply_bpe.py to ${f}..."
-            python $BPEROOT/apply_bpe.py -c $BPE_CODE < $tmp_dir/$f > $tmp_dir/bpe.$f
+            python $BPEROOT/apply_bpe.py -c $BPE_CODE < $merged_dir/$f > $merged_dir/bpe.$f
         done
     done
 
-    perl $CLEAN -ratio 1.5 $tmp_dir/bpe.train $source_lang $target_lang $prep_dir/train 1 250
-    perl $CLEAN -ratio 1.5 $tmp_dir/bpe.valid $source_lang $target_lang $prep_dir/valid 1 250
+    perl $CLEAN -ratio 1.5 $merged_dir/bpe.train $source_lang $target_lang $prep_dir/train 1 250
+    perl $CLEAN -ratio 1.5 $merged_dir/bpe.valid $source_lang $target_lang $prep_dir/valid 1 250
 
     for L in $source_lang $target_lang; do
-        cp $tmp_dir/bpe.test.$L $prep_dir/test.$L
+        cp $merged_dir/bpe.en-fr.$L $prep_dir/en-fr.$L
+        cp $merged_dir/bpe.fr-en.$L $prep_dir/fr-en.$L
     done
 fi
 
@@ -340,8 +377,18 @@ if [ $skip_fairseq_preprocess == false ]; then
     echo -e "$(date +"%D %T") Fairseq preprocessing\n"
 
     fairseq-preprocess --source-lang $source_lang --target-lang $target_lang \
-        --trainpref $prep_dir/train --validpref $prep_dir/valid --testpref $prep_dir/test \
+        --trainpref $prep_dir/train --validpref $prep_dir/valid --testpref $prep_dir/en-fr,$prep_dir/fr-en \
         --destdir $dataset_dir
+
+    mv $dataset_dir/test.$source_lang-$target_lang.$target_lang.idx $dataset_dir/en-fr.$source_lang-$target_lang.$target_lang.idx
+    mv $dataset_dir/test.$source_lang-$target_lang.$source_lang.idx $dataset_dir/en-fr.$source_lang-$target_lang.$source_lang.idx
+    mv $dataset_dir/test.$source_lang-$target_lang.$target_lang.bin $dataset_dir/en-fr.$source_lang-$target_lang.$target_lang.bin
+    mv $dataset_dir/test.$source_lang-$target_lang.$source_lang.bin $dataset_dir/en-fr.$source_lang-$target_lang.$source_lang.bin
+
+    mv $dataset_dir/test1.$source_lang-$target_lang.$target_lang.idx $dataset_dir/fr-en.$source_lang-$target_lang.$target_lang.idx
+    mv $dataset_dir/test1.$source_lang-$target_lang.$source_lang.idx $dataset_dir/fr-en.$source_lang-$target_lang.$source_lang.idx
+    mv $dataset_dir/test1.$source_lang-$target_lang.$target_lang.bin $dataset_dir/fr-en.$source_lang-$target_lang.$target_lang.bin
+    mv $dataset_dir/test1.$source_lang-$target_lang.$source_lang.bin $dataset_dir/fr-en.$source_lang-$target_lang.$source_lang.bin
 fi
 
 ############################################################################################################
@@ -350,7 +397,7 @@ if [ $skip_remove_tmp_dirs == false ]; then
     echo -e "\n--------------------------------------------------------------------------------------------"
     echo -e "$(date +"%D %T") Removing temporary directories\n"
 
-    rm -r $prep_dir $tmp_dir $orig_dir
+    rm -r $prep_dir $tmp_dir $merged_dir $src_dir
 fi
 
 ############################################################################################################

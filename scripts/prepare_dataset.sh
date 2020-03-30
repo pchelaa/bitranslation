@@ -9,6 +9,7 @@ install_libs=false
 source_lang=en
 target_lang=fr
 skip_download_files=false
+skip_unpack_files=false
 skip_preprocess_train_data=false
 skip_preprocess_test_data=false
 skip_split_dataset=false
@@ -26,6 +27,7 @@ Options:\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language(default=$target_lang).\n
   --skip-download-files\t\tSkip download files (default=$skip_download_files).\n
+  --skip-unpack-files\t\tSkip unpack files (default=$skip_unpack_files).\n
   --skip-preprocess-train-data\tSkip preprocess train data (default=$skip_preprocess_train_data).\n
   --skip-preprocess-test-data\tSkip preprocess test data (default=$skip_preprocess_test_data).\n
   --skip-split-dataset\t\tSkip split dataset on train and valid (default=$skip_split_dataset).\n
@@ -49,6 +51,8 @@ while [ $# -gt 0 ]; do
             shift; target_lang="$1"; shift ;;
         --skip-download-files)
             shift; if [ "${1}" == "true" ] || [ "${1}" == "false" ]; then skip_download_files=${1}; shift; else skip_download_files=true; fi ;;
+        --skip-unpack-files)
+            shift; if [ "${1}" == "true" ] || [ "${1}" == "false" ]; then skip_unpack_files=${1}; shift; else skip_unpack_files=true; fi ;;
         --skip-preprocess-train-data)
             shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_preprocess_train_data=${1}; shift; else skip_preprocess_train_data=true; fi ;;
         --skip-preprocess-test-data)
@@ -70,10 +74,11 @@ done
 
 data_dir=$base_dir/data
 libs_dir=$base_dir/libs
-dataset_dir=$base_dir/data/wmt14_$source_lang-$target_lang
+dataset_dir=$data_dir/wmt14_$source_lang-$target_lang
 prep_dir=$dataset_dir/prep
 tmp_dir=$dataset_dir/tmp
-orig_dir=$dataset_dir/orig
+src_dir=$dataset_dir/src
+orig_dir=$data_dir/orig
 fairseq_dir=$libs_dir/fairseq
 mosesdecoder_dir=$libs_dir/mosesdecoder
 subword_nmt_dir=$libs_dir/subword-nmt
@@ -92,7 +97,11 @@ if [ ! -d "$data_dir" ]; then
     mkdir $data_dir
 fi
 
-mkdir -p $orig_dir $tmp_dir $prep_dir $dataset_dir
+if [ -d "$dataset_dir"  ]; then
+    rm -r $dataset_dir
+fi
+
+mkdir -p $orig_dir $tmp_dir $src_dir $prep_dir $dataset_dir
 
 ############################################################################################################
 
@@ -138,7 +147,7 @@ CLEAN=$SCRIPTS/training/clean-corpus-n.perl
 NORM_PUNC=$SCRIPTS/tokenizer/normalize-punctuation.perl
 REM_NON_PRINT_CHAR=$SCRIPTS/tokenizer/remove-non-printing-char.perl
 BPEROOT=$subword_nmt_dir/subword_nmt
-BPE_TOKENS=4000
+BPE_TOKENS=6000
 
 URLS=(
     "http://statmt.org/wmt13/training-parallel-europarl-v7.tgz"
@@ -192,31 +201,37 @@ if [ $skip_download_files == false ]; then
                 echo "$url not successfully downloaded."
                 exit -1
             fi
-            if [ ${file: -4} == ".tgz" ]; then
-                tar zxvf $file
-            elif [ ${file: -4} == ".tar" ]; then
-                tar xvf $file
-            fi
-#           rm -f $file
         fi
     done
 
-    gunzip giga-${target_lang}${source_lang}.release2.fixed.*.gz
+    cd ..
+fi
 
-    for l in $source_lang $target_lang; do
-        corpora_files="$orig_dir/test-full/newstest2014-fren-src.$l.sgm\|$corpora_files"
-        corpora_files="$orig_dir/test-full/newstest2014-fren-ref.$l.sgm\|$corpora_files"
-        for f in "${CORPORA[@]}"; do
-            awk '{if (NR%61 == 0)  print $0; }' $orig_dir/$f.$l > $orig_dir/$f.$l.filtered
-            rm -f $orig_dir/$f.$l
-            mv $orig_dir/$f.$l.filtered $orig_dir/$f.$l
-            corpora_files="$orig_dir/$f.$l\|$corpora_files"
-        done
+############################################################################################################
+
+if [ $skip_unpack_files == false ]; then
+    echo -e "\n--------------------------------------------------------------------------------------------"
+    echo -e "$(date +"%D %T") Unpacking files\n"
+
+    for ((i=0;i<${#URLS[@]};++i)); do
+        file=$orig_dir/${FILES[i]}
+
+        if [ ${file: -4} == ".tgz" ]; then
+            tar zxvf $file --directory $src_dir
+        elif [ ${file: -4} == ".tar" ]; then
+            tar xvf $file --directory $src_dir
+        fi
     done
 
-#    rm -r `find $orig_dir -type f | xargs readlink -f | grep -v "${corpora_files:0:-2}"`
+    gunzip $src_dir/giga-fren.release2.fixed.*.gz
 
-    cd ..
+    for l in $source_lang $target_lang; do
+        for f in "${CORPORA[@]}"; do
+            awk '{if (NR%31 == 0)  print $0; }' $src_dir/$f.$l > $src_dir/$f.$l.filtered
+            rm -f $src_dir/$f.$l
+            mv $src_dir/$f.$l.filtered $src_dir/$f.$l
+        done
+    done
 fi
 
 ############################################################################################################
@@ -229,7 +244,7 @@ if [ $skip_preprocess_train_data == false ]; then
         rm -f  $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
 
         for f in "${CORPORA[@]}"; do
-            cat $orig_dir/$f.$l | \
+            cat $src_dir/$f.$l | \
                 perl $NORM_PUNC $l | \
                 perl $REM_NON_PRINT_CHAR | \
                 perl $TOKENIZER -threads 16 -a -l $l >> $tmp_dir/train.tags.$source_lang-$target_lang.tok.$l
@@ -249,7 +264,7 @@ if [ $skip_preprocess_test_data == false ]; then
         else
             t="ref"
         fi
-        grep '<seg id' $orig_dir/test-full/newstest2014-fren-$t.$l.sgm | \
+        grep '<seg id' $src_dir/test-full/newstest2014-fren-$t.$l.sgm | \
             sed -e 's/<seg id="[0-9]*">\s*//g' | \
             sed -e 's/\s*<\/seg>\s*//g' | \
             sed -e "s/\’/\'/g" | \
@@ -317,7 +332,7 @@ if [ $skip_remove_tmp_dirs == false ]; then
     echo -e "\n--------------------------------------------------------------------------------------------"
     echo -e "$(date +"%D %T") Removing temporary directories\n"
 
-    rm -r $prep_dir $tmp_dir $orig_dir
+    rm -r $prep_dir $tmp_dir $src_dir
 fi
 
 ############################################################################################################

@@ -7,7 +7,7 @@ base_dir=/data/$USER/courses/bt
 install_libs=false
 source_lang=enfr
 target_lang=fren
-port=6016
+port=6006
 
 ##############################################################################################################
 
@@ -65,7 +65,7 @@ echo -e "\n---------------------------------------------------------------------
 echo -e "$(date +"%D %T") Running tensorboard\n"
 
 tensorboard \
-    --logdir $logs_dir/$dataset \
+    --logdir $logs_dir \
     --port $port \
     --bind_all
 
