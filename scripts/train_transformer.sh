@@ -11,6 +11,7 @@ clean_checkpoints=false
 run_tensorboard=false
 tensorboard_port=6006
 max_tokens=4096
+save_interval=1
 source_lang=en
 target_lang=fr
 valid_subset=valid,test
@@ -29,6 +30,7 @@ Options:\n
   --run-tensorboard\t\tRun tensorboard (default=$run_tensorboard).\n
   --tensorboard-port\t\tTensorboard port (default=$tensorboard_port).\n
   --max-tokens\t\t\tMax tokens (default=$max_tokens).\n
+  --save-interval\t\t\tSave interval (default=$save_interval).\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language (default=$target_lang).\n
   --valid-subset\t\t\tValid subset (default=$valid_subset).\n
@@ -56,6 +58,8 @@ while [ $# -gt 0 ]; do
             shift; tensorboard_port="$1"; shift ;;
         --max-tokens)
             shift; max_tokens="$1"; shift ;;
+        --save-interval)
+            shift; save_interval="$1"; shift ;;
         --source-lang)
             shift; source_lang="$1"; shift ;;
         --target-lang)
@@ -209,7 +213,7 @@ fairseq-train $dataset_dir \
     --best-checkpoint-metric bleu \
     --maximize-best-checkpoint-metric \
     --save-dir $checkpoints_dir/$dataset \
-    --save-interval 1 \
+    --save-interval $save_interval \
     --tensorboard-logdir $logs_dir/$dataset \
     --lr 5e-4 \
     --lr-scheduler inverse_sqrt \
