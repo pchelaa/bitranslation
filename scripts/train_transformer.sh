@@ -10,6 +10,7 @@ merge_dataset=false
 clean_checkpoints=false
 run_tensorboard=false
 tensorboard_port=6006
+max_tokens=4096
 source_lang=en
 target_lang=fr
 valid_subset=valid,test
@@ -27,6 +28,7 @@ Options:\n
   --clean-checkpoints\t\tClean checkpoints (default=$clean_checkpoints).\n
   --run-tensorboard\t\tRun tensorboard (default=$run_tensorboard).\n
   --tensorboard-port\t\tTensorboard port (default=$tensorboard_port).\n
+  --max-tokens\t\t\tMax tokens (default=$max_tokens).\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language (default=$target_lang).\n
   --valid-subset\t\t\tValid subset (default=$valid_subset).\n
@@ -52,6 +54,8 @@ while [ $# -gt 0 ]; do
             shift; if [ "$1" == "true" ] || [ "$1" == "false" ]; then run_tensorboard=$1; shift; else run_tensorboard=true; fi ;;
         --tensorboard-port)
             shift; tensorboard_port="$1"; shift ;;
+        --max-tokens)
+            shift; max_tokens="$1"; shift ;;
         --source-lang)
             shift; source_lang="$1"; shift ;;
         --target-lang)
@@ -186,7 +190,7 @@ export CUDA_VISIBLE_DEVICES=$device_id
 fairseq-train $dataset_dir \
     --arch transformer \
     --share-decoder-input-output-embed \
-    --max-tokens 4096 \
+    --max-tokens $max_tokens \
     --attention-dropout 0.1 \
     --encoder-embed-dim  512 --decoder-embed-dim 512 \
     --encoder-ffn-embed-dim 2048 --decoder-ffn-embed-dim 2048 \

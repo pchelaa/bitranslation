@@ -25,8 +25,7 @@ Options:\n
   --help\t\t\t\tPrint this message and exit\n
   --base_dir\t\t\tBase directory (default=$base_dir).\n
   --install-libs\t\t\tInstall libs (default=$install_libs).\n
-  --lang\t\t\t\tSource languages (required).\n
-  --token\t\t\tSpecial token (required).\n
+  --lang\t\t\t\tSource languages and the corresponding tokens (required).\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language(default=$target_lang).\n
   --skip-download-files\t\tSkip download files (default=$skip_download_files).\n
@@ -49,9 +48,7 @@ while [ $# -gt 0 ]; do
         --install-libs)
             shift; if [ "$1" == "true" ] || [ "$1" == "false" ]; then install_libs=$1; shift; else install_libs=true; fi ;;
         --lang)
-            shift; langs="$langs $1"; shift ;;
-        --token)
-            shift; token="$1"; shift ;;
+            shift; langs="$langs $1"; shift; if [ "${1:0:2}" != "--"  ]; then tokens="$tokens $1"; shift; fi ;;
         --source-lang)
             shift; source_lang="$1"; shift ;;
         --target-lang)
@@ -76,6 +73,9 @@ while [ $# -gt 0 ]; do
         *)   break ;;   # end of options: interpreted as num-leaves
     esac
 done
+
+langs=($langs)
+tokens=($tokens)
 
 ############################################################################################################
 
@@ -239,7 +239,7 @@ if [ $skip_unpack_files == false ]; then
     mv $src_dir/test-full/newstest2014-fren-src.en.sgm $src_dir/test-full/newstest2014-fren.en.sgm
     mv $src_dir/test-full/newstest2014-fren-ref.fr.sgm $src_dir/test-full/newstest2014-fren.fr.sgm
 
-    for l in $langs; do
+    for l in ${langs[@]}; do
         for f in "${CORPORA[@]}"; do
             awk '{if (NR%62 == 0)  print $0; }' $src_dir/$f.$l > $src_dir/$f.$l.filtered
             rm -f $src_dir/$f.$l
@@ -255,7 +255,7 @@ if [ $skip_preprocess_train_data == false ]; then
     echo -e "\n--------------------------------------------------------------------------------------------"
     echo -e "$(date +"%D %T") Preprocessing train data\n"
 
-    for l in $langs; do
+    for l in ${langs[@]}; do
         rm -f  $tmp_dir/train.tags.en-fr.tok.$l
 
         for f in "${CORPORA[@]}"; do
@@ -266,7 +266,7 @@ if [ $skip_preprocess_train_data == false ]; then
         done
     done
 
-    for l in $langs; do
+    for l in ${langs[@]}; do
         awk '{if (NR%23 == 0)  print $0; }' $tmp_dir/train.tags.en-fr.tok.$l > $tmp_dir/valid.$l
         awk '{if (NR%23 != 0)  print $0; }' $tmp_dir/train.tags.en-fr.tok.$l > $tmp_dir/train.$l
     done
@@ -278,7 +278,7 @@ if [ $skip_preprocess_test_data == false ]; then
     echo -e "\n--------------------------------------------------------------------------------------------"
     echo -e "$(date +"%D %T") Preprocessing test data\n"
 
-    for l in $langs; do
+    for l in ${langs[@]}; do
         rm -f $tmp_dir/test.$l
 
         for f in "${TESTS[@]}"; do
@@ -300,8 +300,12 @@ if [ $skip_merge_data == false ]; then
 
     for f in train valid; do
         rm -f $merged_dir/$f.$source_lang
-        for L in $langs; do
-            if [ $L == fr ] && [ ! -z "$token" ]; then
+
+        for ((i=0;i<${#langs[@]};++i)); do
+            L=${langs[i]}
+            token=${tokens[i]}
+
+            if [ ! -z "$token" ]; then
                 awk -v token=$token '{ print token" "$0; }' $tmp_dir/$f.$L >> $merged_dir/$f.$source_lang
             else
                 awk '{ print $0; }' $tmp_dir/$f.$L >> $merged_dir/$f.$source_lang
@@ -309,14 +313,13 @@ if [ $skip_merge_data == false ]; then
         done
     done
 
-    for  L in $langs; do
-        reversed_langs="$L $reversed_langs"
-    done
-
     for f in train valid; do
         rm -f $merged_dir/$f.$target_lang
-        for L in $reversed_langs; do
-            if [ $L == fr  ] && [ ! -z "$token" ]; then
+        for ((i=${#langs[@]};i>0;--i)); do
+             L=${langs[i-1]}
+             token=${tokens[i-1]}
+
+            if [ ! -z "$token" ]; then
                 awk -v token=$token '{print token" "$0; }' $tmp_dir/$f.$L >> $merged_dir/$f.$target_lang
             else
                 awk '{print $0; }' $tmp_dir/$f.$L >> $merged_dir/$f.$target_lang
@@ -324,19 +327,25 @@ if [ $skip_merge_data == false ]; then
         done
     done
 
-    if  [ ! -z "$token" ]; then
-        awk -v token=$token '{ print token" "$0; }' $tmp_dir/test.fr >> $merged_dir/fr-en.$source_lang
-    else
-        awk '{ print $0; }' $tmp_dir/test.fr >> $merged_dir/fr-en.$source_lang
-    fi
-    awk '{ print $0; }' $tmp_dir/test.en >> $merged_dir/fr-en.$target_lang
+    for ((i=0;i<${#langs[@]};++i)); do
+        L=${langs[i]}
+        token=${tokens[i]}
 
-    awk '{ print $0; }' $tmp_dir/test.en >> $merged_dir/en-fr.$source_lang
-    if  [ ! -z "$token" ]; then
-        awk -v token=$token '{ print token" "$0; }' $tmp_dir/test.fr >> $merged_dir/en-fr.$target_lang
-    else
-        awk '{ print $0; }' $tmp_dir/test.fr >> $merged_dir/en-fr.$target_lang
-    fi
+        L1=$L
+        if [ $L == fr ]; then
+            L2=en
+        else
+            L2=fr
+        fi
+
+        if  [ ! -z "$token" ]; then
+            awk -v token=$token '{ print token" "$0; }' $tmp_dir/test.$L > $merged_dir/$L1-$L2.$source_lang
+            awk -v token=$token '{ print token" "$0; }' $tmp_dir/test.$L > $merged_dir/$L2-$L1.$target_lang
+        else
+            awk '{ print $0; }' $tmp_dir/test.$L > $merged_dir/$L1-$L2.$source_lang
+            awk '{ print $0; }' $tmp_dir/test.$L > $merged_dir/$L2-$L1.$target_lang
+        fi
+    done
 fi
 
 ############################################################################################################
