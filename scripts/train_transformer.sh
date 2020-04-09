@@ -11,7 +11,7 @@ clean_checkpoints=false
 run_tensorboard=false
 tensorboard_port=6006
 max_tokens=4096
-save_interval=1
+save_interval=5
 source_lang=en
 target_lang=fr
 valid_subset=valid,test
@@ -219,6 +219,7 @@ fairseq-train $dataset_dir \
     --lr-scheduler inverse_sqrt \
     --weight-decay 0.0001 \
     --criterion label_smoothed_cross_entropy \
-    --valid-subset $valid_subset
+    --valid-subset $valid_subset \
+    --fp16
 
 ##############################################################################################################

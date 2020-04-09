@@ -48,7 +48,7 @@ while [ $# -gt 0 ]; do
         --install-libs)
             shift; if [ "$1" == "true" ] || [ "$1" == "false" ]; then install_libs=$1; shift; else install_libs=true; fi ;;
         --lang)
-            shift; langs="$langs $1"; shift; if [ "${1:0:2}" != "--"  ]; then tokens="$tokens $1"; shift; fi ;;
+            shift; langs+=("$1"); shift; if [ "${1:0:2}" != "--"  ]; then tokens+=("$1"); shift; else tokens+=(""); fi ;;
         --source-lang)
             shift; source_lang="$1"; shift ;;
         --target-lang)
@@ -73,9 +73,6 @@ while [ $# -gt 0 ]; do
         *)   break ;;   # end of options: interpreted as num-leaves
     esac
 done
-
-langs=($langs)
-tokens=($tokens)
 
 ############################################################################################################
 
