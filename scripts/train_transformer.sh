@@ -16,6 +16,8 @@ source_lang=en
 target_lang=fr
 valid_subset=valid,test
 device_id=0
+criterion=label_smoothed_cross_entropy
+arch=transformer
 
 ##############################################################################################################
 
@@ -35,6 +37,8 @@ Options:\n
   --target-lang\t\t\tTarget language (default=$target_lang).\n
   --valid-subset\t\t\tValid subset (default=$valid_subset).\n
   --device-id\t\t\tCuda device ID (default=$device_id).\n
+  --criterion\t\t\tCriterion (default=$criterion).\n
+  --arch\t\t\tAcrchitecture (default=$arch).\n
 ";
 
 ##############################################################################################################
@@ -68,6 +72,10 @@ while [ $# -gt 0 ]; do
             shift; valid_subset="$1"; shift ;;
         --device-id)
             shift; device_id="$1"; shift ;;
+        --criterion)
+            shift; criterion="$1"; shift ;;
+        --arch)
+            shift; arch="$1"; shift ;;
         -*)  echo "Unknown argument: $1, exiting"; echo -e $usage; exit 1 ;;
         *)   break ;;   # end of options: interpreted as num-leaves
     esac
