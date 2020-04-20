@@ -221,6 +221,7 @@ class TransformerModel(FairseqEncoderDecoderModel):
 
         encoder = cls.build_encoder(args, src_dict, encoder_embed_tokens)
         decoder = cls.build_decoder(args, tgt_dict, decoder_embed_tokens)
+        prior = cls.build_prior(args)
         return cls(args, encoder, decoder)
 
     @classmethod
@@ -235,6 +236,37 @@ class TransformerModel(FairseqEncoderDecoderModel):
             embed_tokens,
             no_encoder_attn=getattr(args, "no_cross_attention", False),
         )
+
+    @classmethod
+    def build_prior(cls, args):
+prior_params = {
+    "type": "normal",
+    "length_predictor": {
+        "type": "diff_softmax",
+        "diff_range": 16,
+        "dropout": 0.33,
+        "label_smoothing": 0.1
+    },
+    "flow": {
+        "levels": 3,
+        "num_steps": [4, 2, 2],
+        "factors": [2, 2],
+        "hidden_features": 256,
+        "transform": "affine",
+        "coupling_type": "rnn",
+        "rnn_mode": "LSTM",
+        "dropout": 0.0,
+        "inverse": True
+    }
+}
+max_src_length = 64
+latent_dim = 256
+prior_params['flow']['features'] = latent_dim
+prior_params['flow']['src_features'] = latent_dim
+prior_params['length_predictor']['features'] = latent_dim
+prior_params['length_predictor']['max_src_length'] = max_src_length
+
+        return Prior.by_name(prior_params.pop('type')).from_params(prior_params)
 
     # TorchScript doesn't support optional arguments with variable length (**kwargs).
     # Current workaround is to add union of all arguments in child classes.
@@ -270,7 +302,7 @@ class TransformerModel(FairseqEncoderDecoderModel):
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
         )
-        return decoder_out
+        return encoder_out, decoder_out
 
     # Since get_normalized_probs is in the Fairseq Model which is not scriptable,
     # I rewrite the get_normalized_probs from Base Class to call the
@@ -285,6 +317,30 @@ class TransformerModel(FairseqEncoderDecoderModel):
         """Get normalized probabilities (or log probs) from a net's output."""
         return self.get_normalized_probs_scriptable(net_output, log_probs, sample)
 
+
+    # MY_CHANGES:
+    @torch.jit.export
+    def get_prior_log_probability(
+        self,
+        enc_output: EncoderOut,
+        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+        log_probs: bool,
+        sample: Optional[Dict[str, Tensor]] = None,
+    ):
+        z = net_output[1]['z']
+        return self.prior.log_probability(
+            z,
+            torch.ones_like(z, device=z.device), # mask of ones shaped as z - target
+            enc_output['encoder_out'].transpose(0, 1),
+            enc_output['encoder_padding_mask'],
+        )
+
+        # return EncoderOut(
+        #     encoder_out=x,  # T x B x C
+        #     encoder_padding_mask=encoder_padding_mask,  # B x T
+        #     encoder_embedding=encoder_embedding,  # B x T x C
+        #     encoder_states=encoder_states,  # List[T x B x C]
+        # )
 
 @register_model("transformer_align")
 class TransformerAlignModel(TransformerModel):
@@ -774,6 +830,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         # decoder layers
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
+
+        # Эти лэйеры исполняются подряд, друг за другом?
         for idx, layer in enumerate(self.layers):
             encoder_state: Optional[Tensor] = None
             if encoder_out is not None:
@@ -792,7 +850,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
             dropout_probability = torch.empty(1).uniform_()
             if not self.training or (dropout_probability > self.decoder_layerdrop):
-                x, layer_attn, _ = layer(
+                # MY_CHANGES:
+                x, layer_attn, _, z = layer(
                     x,
                     encoder_state,
                     encoder_out.encoder_padding_mask
@@ -814,6 +873,9 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
             # average probabilities over heads
             attn = attn.mean(dim=0)
+        # MY_CHANGES:
+        if z is not None:
+            z = z.mean(dim=0)
 
         if self.layer_norm is not None:
             x = self.layer_norm(x)
@@ -823,8 +885,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
-
-        return x, {"attn": [attn], "inner_states": inner_states}
+        # MY_CHANGES:
+        return x, {"attn": [attn], "inner_states": inner_states, "z": z}
 
     def output_layer(self, features):
         """Project features to the vocabulary size."""
