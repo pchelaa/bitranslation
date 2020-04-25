@@ -27,6 +27,7 @@ from fairseq.modules import (
     TransformerEncoderLayer,
 )
 from torch import Tensor
+from prior import Prior
 
 
 DEFAULT_MAX_SOURCE_POSITIONS = 1024
@@ -34,7 +35,7 @@ DEFAULT_MAX_TARGET_POSITIONS = 1024
 
 
 @register_model("transformer_with_flow")
-class TransformerModel(FairseqEncoderDecoderModel):
+class TransformerWithFlowModel(FairseqEncoderDecoderModel):
     """
     Transformer model from `"Attention Is All You Need" (Vaswani, et al, 2017)
     <https://arxiv.org/abs/1706.03762>`_.
@@ -84,10 +85,11 @@ class TransformerModel(FairseqEncoderDecoderModel):
         }
         # fmt: on
 
-    def __init__(self, args, encoder, decoder):
+    def __init__(self, args, encoder, decoder, prior):
         super().__init__(encoder, decoder)
         self.args = args
         self.supports_align_args = True
+        self.prior = prior
 
     @staticmethod
     def add_args(parser):
@@ -222,7 +224,7 @@ class TransformerModel(FairseqEncoderDecoderModel):
         encoder = cls.build_encoder(args, src_dict, encoder_embed_tokens)
         decoder = cls.build_decoder(args, tgt_dict, decoder_embed_tokens)
         prior = cls.build_prior(args)
-        return cls(args, encoder, decoder)
+        return cls(args, encoder, decoder, prior)
 
     @classmethod
     def build_encoder(cls, args, src_dict, embed_tokens):
@@ -239,32 +241,32 @@ class TransformerModel(FairseqEncoderDecoderModel):
 
     @classmethod
     def build_prior(cls, args):
-prior_params = {
-    "type": "normal",
-    "length_predictor": {
-        "type": "diff_softmax",
-        "diff_range": 16,
-        "dropout": 0.33,
-        "label_smoothing": 0.1
-    },
-    "flow": {
-        "levels": 3,
-        "num_steps": [4, 2, 2],
-        "factors": [2, 2],
-        "hidden_features": 256,
-        "transform": "affine",
-        "coupling_type": "rnn",
-        "rnn_mode": "LSTM",
-        "dropout": 0.0,
-        "inverse": True
-    }
-}
-max_src_length = 64
-latent_dim = 256
-prior_params['flow']['features'] = latent_dim
-prior_params['flow']['src_features'] = latent_dim
-prior_params['length_predictor']['features'] = latent_dim
-prior_params['length_predictor']['max_src_length'] = max_src_length
+        prior_params = {
+            "type": "normal",
+            "length_predictor": {
+                "type": "diff_softmax",
+                "diff_range": 16,
+                "dropout": 0.33,
+                "label_smoothing": 0.1
+            },
+            "flow": {
+                "levels": 3,
+                "num_steps": [4, 2, 2],
+                "factors": [2, 2],
+                "hidden_features": 256,
+                "transform": "affine",
+                "coupling_type": "rnn",
+                "rnn_mode": "LSTM",
+                "dropout": 0.0,
+                "inverse": True
+            }
+        }
+        max_src_length = 64
+        latent_dim = 256
+        prior_params['flow']['features'] = latent_dim
+        prior_params['flow']['src_features'] = latent_dim
+        prior_params['length_predictor']['features'] = latent_dim
+        prior_params['length_predictor']['max_src_length'] = max_src_length
 
         return Prior.by_name(prior_params.pop('type')).from_params(prior_params)
 
@@ -317,7 +319,6 @@ prior_params['length_predictor']['max_src_length'] = max_src_length
         """Get normalized probabilities (or log probs) from a net's output."""
         return self.get_normalized_probs_scriptable(net_output, log_probs, sample)
 
-
     # MY_CHANGES:
     @torch.jit.export
     def get_prior_log_probability(
@@ -330,7 +331,7 @@ prior_params['length_predictor']['max_src_length'] = max_src_length
         z = net_output[1]['z']
         return self.prior.log_probability(
             z,
-            torch.ones_like(z, device=z.device), # mask of ones shaped as z - target
+            torch.ones_like(z, device=z.device),  # mask of ones shaped as z - target
             enc_output['encoder_out'].transpose(0, 1),
             enc_output['encoder_padding_mask'],
         )
