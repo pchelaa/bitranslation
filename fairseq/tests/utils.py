@@ -5,7 +5,6 @@
 
 import argparse
 import torch
-import torch.nn.functional as F
 
 from fairseq import utils
 from fairseq.data import Dictionary
@@ -15,7 +14,6 @@ from fairseq.models import (
     FairseqEncoderDecoderModel,
     FairseqIncrementalDecoder,
 )
-from fairseq.models.fairseq_encoder import EncoderOut
 from fairseq.tasks import FairseqTask
 
 
@@ -171,24 +169,10 @@ class TestEncoder(FairseqEncoder):
         self.args = args
 
     def forward(self, src_tokens, src_lengths=None, **kwargs):
-        return EncoderOut(
-            encoder_out=src_tokens,
-            encoder_padding_mask=None,
-            encoder_embedding=None,
-            encoder_states=None,
-            src_tokens=None,
-            src_lengths=None,
-        )
+        return src_tokens
 
     def reorder_encoder_out(self, encoder_out, new_order):
-        return EncoderOut(
-            encoder_out=encoder_out.encoder_out.index_select(0, new_order),
-            encoder_padding_mask=None,
-            encoder_embedding=None,
-            encoder_states=None,
-            src_tokens=None,
-            src_lengths=None,
-        )
+        return encoder_out.index_select(0, new_order)
 
 
 class TestIncrementalDecoder(FairseqIncrementalDecoder):
@@ -203,7 +187,7 @@ class TestIncrementalDecoder(FairseqIncrementalDecoder):
             prev_output_tokens = prev_output_tokens[:, -1:]
         bbsz = prev_output_tokens.size(0)
         vocab = len(self.dictionary)
-        src_len = encoder_out.encoder_out.size(1)
+        src_len = encoder_out.size(1)
         tgt_len = prev_output_tokens.size(1)
 
         # determine number of steps
@@ -248,47 +232,3 @@ class TestIncrementalDecoder(FairseqIncrementalDecoder):
 
     def max_positions(self):
         return self.args.max_decoder_positions
-
-
-class TestReshapingEncoder(FairseqEncoder):
-    def __init__(self, args, dictionary):
-        super().__init__(dictionary)
-        self.args = args
-
-    def forward(self, src_tokens, src_lengths=None, **kwargs):
-        b_sz, t_sz = src_tokens.shape
-        padding_needed = t_sz % 2
-        x = src_tokens
-        if padding_needed > 0:
-            padding_needed = 2 - padding_needed
-            x = F.pad(x, (0, padding_needed))
-
-        return EncoderOut(
-            encoder_out=x.view(b_sz, -1, 2),
-            encoder_padding_mask=None,
-            encoder_embedding=None,
-            encoder_states=None,
-            src_tokens=None,
-            src_lengths=None,
-        )
-
-    def reorder_encoder_out(self, encoder_out, new_order):
-        return EncoderOut(
-            encoder_out=encoder_out.encoder_out.index_select(0, new_order),
-            encoder_padding_mask=None,
-            encoder_embedding=None,
-            encoder_states=None,
-            src_tokens=None,
-            src_lengths=None,
-        )
-
-
-class TestReshapingModel(FairseqEncoderDecoderModel):
-    def __init__(self, encoder, decoder):
-        super().__init__(encoder, decoder)
-
-    @classmethod
-    def build_model(cls, args, task):
-        encoder = TestReshapingEncoder(args, task.source_dictionary)
-        decoder = TestIncrementalDecoder(args, task.target_dictionary)
-        return cls(encoder, decoder)

@@ -17,19 +17,15 @@ class AdaptiveLoss(FairseqCriterion):
     graphical processing units (GPU), described in the paper "Efficient softmax approximation for GPUs"
     (http://arxiv.org/abs/1609.04309)."""
 
-    def __init__(self, task, sentence_avg):
-        super().__init__(task)
-        self.sentence_avg = sentence_avg
+    def __init__(self, args, task):
+        super().__init__(args, task)
 
-    @classmethod
-    def build_criterion(cls, args, task):
         if args.ddp_backend == 'c10d':
             raise Exception(
                 'AdaptiveLoss is not compatible with the c10d '
                 'version of DistributedDataParallel. Please use '
                 '`--ddp-backend=no_c10d` instead.'
             )
-        return cls(task, args.sentence_avg)
 
     def forward(self, model, sample, reduce=True):
         """Compute the loss for the given sample.
@@ -68,7 +64,7 @@ class AdaptiveLoss(FairseqCriterion):
 
         orig = utils.strip_pad(orig_target, self.padding_idx)
         ntokens = orig.numel()
-        sample_size = sample['target'].size(0) if self.sentence_avg else ntokens
+        sample_size = sample['target'].size(0) if self.args.sentence_avg else ntokens
         logging_output = {
             'loss': loss.data,
             'ntokens': ntokens,

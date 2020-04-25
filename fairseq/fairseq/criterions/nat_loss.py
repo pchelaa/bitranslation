@@ -15,21 +15,17 @@ from fairseq.criterions import FairseqCriterion, register_criterion
 
 @register_criterion("nat_loss")
 class LabelSmoothedDualImitationCriterion(FairseqCriterion):
-
-    def __init__(self, task, label_smoothing):
-        super().__init__(task)
-        self.label_smoothing = label_smoothing
-
     @staticmethod
     def add_args(parser):
         """Add criterion-specific arguments to the parser."""
+        # fmt: off
         parser.add_argument(
             '--label-smoothing',
             default=0.,
             type=float,
             metavar='D',
-            help='epsilon for label smoothing, 0 means no label smoothing',
-        )
+            help='epsilon for label smoothing, 0 means no label smoothing')
+        # fmt: on
 
     def _compute_loss(
         self, outputs, targets, masks=None, label_smoothing=0.0, name="loss", factor=1.0

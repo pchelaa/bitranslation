@@ -22,17 +22,13 @@ logger = logging.getLogger(__name__)
 
 def save_checkpoint(args, trainer, epoch_itr, val_loss):
     from fairseq import distributed_utils, meters
-    
-    # only one worker should attempt to create the required dir
-    if args.distributed_rank == 0:
-        os.makedirs(args.save_dir, exist_ok=True)
 
     prev_best = getattr(save_checkpoint, "best", val_loss)
     if val_loss is not None:
         best_function = max if args.maximize_best_checkpoint_metric else min
         save_checkpoint.best = best_function(val_loss, prev_best)
 
-    if args.no_save or not trainer.is_data_parallel_master:
+    if args.no_save or not distributed_utils.is_master(args):
         return
 
     def is_better(a, b):
@@ -45,19 +41,18 @@ def save_checkpoint(args, trainer, epoch_itr, val_loss):
     end_of_epoch = epoch_itr.end_of_epoch()
     updates = trainer.get_num_updates()
 
-    suffix = getattr(args, "checkpoint_suffix", "")
     checkpoint_conds = collections.OrderedDict()
-    checkpoint_conds["checkpoint{}{}.pt".format(epoch, suffix)] = (
+    checkpoint_conds["checkpoint{}.pt".format(epoch)] = (
         end_of_epoch
         and not args.no_epoch_checkpoints
         and epoch % args.save_interval == 0
     )
-    checkpoint_conds["checkpoint_{}_{}{}.pt".format(epoch, updates, suffix)] = (
+    checkpoint_conds["checkpoint_{}_{}.pt".format(epoch, updates)] = (
         not end_of_epoch
         and args.save_interval_updates > 0
         and updates % args.save_interval_updates == 0
     )
-    checkpoint_conds["checkpoint_best{}.pt".format(suffix)] = val_loss is not None and (
+    checkpoint_conds["checkpoint_best.pt"] = val_loss is not None and (
         not hasattr(save_checkpoint, "best")
         or is_better(val_loss, save_checkpoint.best)
     )
@@ -67,7 +62,7 @@ def save_checkpoint(args, trainer, epoch_itr, val_loss):
             not hasattr(save_checkpoint, "best")
             or is_better(val_loss, save_checkpoint.best)
         )
-    checkpoint_conds["checkpoint_last{}.pt".format(suffix)] = not args.no_last_checkpoints
+    checkpoint_conds["checkpoint_last.pt"] = not args.no_last_checkpoints
 
     extra_state = {"train_iterator": epoch_itr.state_dict(), "val_loss": val_loss}
     if hasattr(save_checkpoint, "best"):
@@ -114,7 +109,6 @@ def save_checkpoint(args, trainer, epoch_itr, val_loss):
             if os.path.lexists(old_chk):
                 os.remove(old_chk)
 
-
 def load_checkpoint(args, trainer, **passthrough_args):
     """
     Load a checkpoint and restore the training iterator.
@@ -122,10 +116,12 @@ def load_checkpoint(args, trainer, **passthrough_args):
     *passthrough_args* will be passed through to
     ``trainer.get_train_iterator``.
     """
-    
-    suffix = getattr(args, "checkpoint_suffix", "")
+    # only one worker should attempt to create the required dir
+    if args.distributed_rank == 0:
+        os.makedirs(args.save_dir, exist_ok=True)
+
     if args.restore_file == "checkpoint_last.pt":
-        checkpoint_path = os.path.join(args.save_dir, "checkpoint_last{}.pt".format(suffix))
+        checkpoint_path = os.path.join(args.save_dir, "checkpoint_last.pt")
     else:
         checkpoint_path = args.restore_file
 
@@ -154,7 +150,7 @@ def load_checkpoint(args, trainer, **passthrough_args):
         epoch_itr.load_state_dict(itr_state)
     else:
         epoch_itr = trainer.get_train_iterator(
-            epoch=1, load_dataset=True, **passthrough_args
+            epoch=0, load_dataset=True, **passthrough_args
         )
 
     trainer.lr_step(epoch_itr.epoch)
@@ -177,7 +173,7 @@ def load_checkpoint_to_cpu(path, arg_overrides=None):
     return state
 
 
-def load_model_ensemble(filenames, arg_overrides=None, task=None, strict=True, suffix=''):
+def load_model_ensemble(filenames, arg_overrides=None, task=None):
     """Loads an ensemble of models.
 
     Args:
@@ -186,18 +182,15 @@ def load_model_ensemble(filenames, arg_overrides=None, task=None, strict=True, s
             were used during model training
         task (fairseq.tasks.FairseqTask, optional): task to use for loading
     """
-    ensemble, args, _task = load_model_ensemble_and_task(
-        filenames, arg_overrides, task, strict, suffix,
-    )
+    ensemble, args, _task = load_model_ensemble_and_task(filenames, arg_overrides, task)
     return ensemble, args
 
 
-def load_model_ensemble_and_task(filenames, arg_overrides=None, task=None, strict=True, suffix=''):
+def load_model_ensemble_and_task(filenames, arg_overrides=None, task=None):
     from fairseq import tasks
 
     ensemble = []
     for filename in filenames:
-        filename = filename.replace(".pt", suffix + ".pt")
         if not PathManager.exists(filename):
             raise IOError("Model file not found: {}".format(filename))
         state = load_checkpoint_to_cpu(filename, arg_overrides)
@@ -208,7 +201,7 @@ def load_model_ensemble_and_task(filenames, arg_overrides=None, task=None, stric
 
         # build model for ensemble
         model = task.build_model(args)
-        model.load_state_dict(state["model"], strict=strict, args=args)
+        model.load_state_dict(state["model"], strict=True, args=args)
         ensemble.append(model)
     return ensemble, args, task
 
@@ -274,7 +267,7 @@ def save_state(
         extra_state = {}
     state_dict = {
         "args": args,
-        "model": convert_state_dict_type(model_state_dict) if model_state_dict else {},
+        "model": model_state_dict if model_state_dict else {},
         "optimizer_history": optim_history
         + [
             {
@@ -356,12 +349,6 @@ def _upgrade_state_dict(state):
         state["args"].dataset_impl = "raw"
     elif getattr(state["args"], "lazy_load", False):
         state["args"].dataset_impl = "lazy"
-    # epochs start at 1
-    if state["extra_state"]["train_iterator"] is not None:
-        state["extra_state"]["train_iterator"]["epoch"] = max(
-            state["extra_state"]["train_iterator"].get("epoch", 1),
-            1,
-        )
 
     # set any missing default values in the task, model or other registries
     registry.set_defaults(state["args"], tasks.TASK_REGISTRY[state["args"].task])

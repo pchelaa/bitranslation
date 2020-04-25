@@ -11,7 +11,6 @@ import torch
 
 from fairseq import utils
 from fairseq.data import (
-    AppendTokenDataset,
     data_utils,
     Dictionary,
     IdDataset,
@@ -149,7 +148,7 @@ class LanguageModelingTask(FairseqTask):
 
         return model
 
-    def load_dataset(self, split, epoch=1, combine=False, **kwargs):
+    def load_dataset(self, split, epoch=0, combine=False, **kwargs):
         """Load a given dataset split.
 
         Args:
@@ -158,7 +157,7 @@ class LanguageModelingTask(FairseqTask):
         paths = utils.split_paths(self.args.data)
         assert len(paths) > 0
 
-        data_path = paths[(epoch - 1) % len(paths)]
+        data_path = paths[epoch % len(paths)]
         split_path = os.path.join(data_path, split)
 
         dataset = data_utils.load_indexed_dataset(
@@ -201,32 +200,28 @@ class LanguageModelingTask(FairseqTask):
     def build_dataset_for_inference(self, src_tokens, src_lengths, **kwargs):
         """
         Generate batches for inference. We prepend an eos token to src_tokens
-        (or bos if `--add-bos-token` is set) and we append a <pad> to target.
+        (or bos if `--add-bos-token` is set) and we append an eos to target.
         This is convenient both for generation with a prefix and LM scoring.
         """
-        dataset = StripTokenDataset(
-            TokenBlockDataset(
-                src_tokens,
-                src_lengths,
-                block_size=None,  # ignored for "eos" break mode
-                pad=self.source_dictionary.pad(),
-                eos=self.source_dictionary.eos(),
-                break_mode="eos",
-            ),
-            # remove eos from (end of) target sequence
-            self.source_dictionary.eos(),
+        tgt_dataset = TokenBlockDataset(
+            src_tokens,
+            src_lengths,
+            block_size=None,  # ignored for "eos" break mode
+            pad=self.source_dictionary.pad(),
+            eos=self.source_dictionary.eos(),
+            break_mode="eos",
         )
         src_dataset = PrependTokenDataset(
-            dataset,
+            StripTokenDataset(
+                tgt_dataset,
+                # remove eos from (end of) target sequence
+                self.source_dictionary.eos(),
+            ),
             token=(
                 self.source_dictionary.bos()
                 if getattr(self.args, "add_bos_token", False)
                 else self.source_dictionary.eos()
             ),
-        )
-        tgt_dataset = AppendTokenDataset(
-            dataset,
-            token=self.source_dictionary.pad()
         )
         return NestedDictionaryDataset(
             {

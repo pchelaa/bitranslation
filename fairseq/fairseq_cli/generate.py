@@ -17,7 +17,6 @@ import torch
 from fairseq import bleu, checkpoint_utils, options, tasks, utils
 from fairseq.logging import progress_bar
 from fairseq.logging.meters import StopwatchMeter, TimeMeter
-from fairseq.data import encoders
 
 
 def main(args):
@@ -67,7 +66,7 @@ def _main(args, output_file):
     # Load ensemble
     logger.info('loading model(s) from {}'.format(args.path))
     models, _model_args = checkpoint_utils.load_model_ensemble(
-        utils.split_paths(args.path),
+        args.path.split(os.pathsep),
         arg_overrides=eval(args.model_overrides),
         task=task,
     )
@@ -111,18 +110,7 @@ def _main(args, output_file):
 
     # Initialize generator
     gen_timer = StopwatchMeter()
-    generator = task.build_generator(models, args)
-
-    # Handle tokenization and BPE
-    tokenizer = encoders.build_tokenizer(args)
-    bpe = encoders.build_bpe(args)
-
-    def decode_fn(x):
-        if bpe is not None:
-            x = bpe.decode(x)
-        if tokenizer is not None:
-            x = tokenizer.decode(x)
-        return x
+    generator = task.build_generator(args)
 
     # Generate and compute BLEU score
     if args.sacrebleu:
@@ -165,18 +153,7 @@ def _main(args, output_file):
                 else:
                     src_str = ""
                 if has_target:
-                    target_str = tgt_dict.string(
-                        target_tokens,
-                        args.remove_bpe,
-                        escape_unk=True,
-                        extra_symbols_to_ignore={
-                            generator.eos,
-                        }
-                    )
-
-            src_str = decode_fn(src_str)
-            if has_target:
-                target_str = decode_fn(target_str)
+                    target_str = tgt_dict.string(target_tokens, args.remove_bpe, escape_unk=True)
 
             if not args.quiet:
                 if src_dict is not None:
@@ -193,17 +170,11 @@ def _main(args, output_file):
                     align_dict=align_dict,
                     tgt_dict=tgt_dict,
                     remove_bpe=args.remove_bpe,
-                    extra_symbols_to_ignore={
-                        generator.eos,
-                    }
                 )
-                detok_hypo_str = decode_fn(hypo_str)
+
                 if not args.quiet:
                     score = hypo['score'] / math.log(2)  # convert to base 2
-                    # original hypothesis (after tokenization and BPE)
                     print('H-{}\t{}\t{}'.format(sample_id, score, hypo_str), file=output_file)
-                    # detokenized hypothesis
-                    print('D-{}\t{}\t{}'.format(sample_id, score, detok_hypo_str), file=output_file)
                     print('P-{}\t{}'.format(
                         sample_id,
                         ' '.join(map(

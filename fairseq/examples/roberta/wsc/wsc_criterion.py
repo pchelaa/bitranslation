@@ -10,11 +10,11 @@ import torch.nn.functional as F
 
 from fairseq import utils
 from fairseq.data import encoders
-from fairseq.criterions import LegacyFairseqCriterion, register_criterion
+from fairseq.criterions import FairseqCriterion, register_criterion
 
 
 @register_criterion('wsc')
-class WSCCriterion(LegacyFairseqCriterion):
+class WSCCriterion(FairseqCriterion):
 
     def __init__(self, args, task):
         super().__init__(args, task)

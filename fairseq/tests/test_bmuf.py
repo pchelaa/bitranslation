@@ -29,8 +29,7 @@ def setup_model_loss_criterion(args, rank, is_cuda):
     setup model, criterion and optimizer based on input args
     """
     args.distributed_rank = rank
-    if args.distributed_world_size > 1:
-        distributed_utils.distributed_init(args)
+    distributed_utils.distributed_init(args)
     torch.manual_seed(1)
     model = Model(args.input_size, args.nb_classes)
     loss_fn = nn.CrossEntropyLoss()
@@ -95,7 +94,6 @@ def setup_args():
     args.use_nbm = True
     args.average_sync = True
     args.global_sync_iter = 1
-    args.model_parallel_size = 1
     args.distributed_backend = "gloo"
 
     args.distributed_world_size = 2
@@ -122,26 +120,23 @@ class TestBMUF(unittest.TestCase):
 
         for p in processes:
             p.join()
-        return results
+
+        # Make sure params in both machines are same
+        assert len(results) == 2
+        self.assertAlmostEqual(results[0], results[1])
 
     def test_bmuf_sync(self):
         # Train model for 1 iteration and do bmuf sync without doing warmup
         args = setup_args()
         iterations = 1
-        results = self.bmuf_process(args, iterations)
-        # Make sure params in both machines are same
-        assert len(results) == 2
-        self.assertAlmostEqual(results[0], results[1])
+        self.bmuf_process(args, iterations)
 
     def test_warmup_sync(self):
         # Train model for 20 iteration and do warmup sync without doing bmuf sync
         args = setup_args()
         args.warmup_iterations = 20
         iterations = 20
-        results = self.bmuf_process(args, iterations)
-        # Make sure params in both machines are same
-        assert len(results) == 2
-        self.assertAlmostEqual(results[0], results[1])
+        self.bmuf_process(args, iterations)
 
     def test_warmup_sync_bmuf_sync(self):
         # Train model for 25 iteration and do warmup sync after 20 iteration
@@ -150,19 +145,7 @@ class TestBMUF(unittest.TestCase):
         args.warmup_iterations = 20
         args.global_sync_iter = 5
         iterations = 25
-        results = self.bmuf_process(args, iterations)
-        # Make sure params in both machines are same
-        assert len(results) == 2
-        self.assertAlmostEqual(results[0], results[1])
-
-    def test_single_gpu_bmuf(self):
-        # Train model for 5 iterations and use GPU 1
-        args = setup_args()
-        args.distributed_world_size = 1
-        args.warmup_iterations = 5
-        iterations = 20
-        results = self.bmuf_process(args, iterations)
-        assert len(results) == 1
+        self.bmuf_process(args, iterations)
 
     def assertAlmostEqual(self, t1, t2):
         self.assertEqual(t1.size(), t2.size(), "size mismatch")
