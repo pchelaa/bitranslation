@@ -10,9 +10,8 @@ import sys
 
 import torch
 
-from fairseq import checkpoint_utils, distributed_utils, options, utils
+from fairseq import checkpoint_utils, options, utils
 from fairseq.logging import metrics, progress_bar
-from fairseq.options import add_distributed_training_args
 
 logging.basicConfig(
     format='%(asctime)s | %(levelname)s | %(name)s | %(message)s',
@@ -20,7 +19,7 @@ logging.basicConfig(
     level=logging.INFO,
     stream=sys.stdout,
 )
-logger = logging.getLogger('fairseq_cli.validate')
+logger = logging.getLogger('fairseq_cli.train')
 
 
 def main(args, override_args=None):
@@ -43,7 +42,6 @@ def main(args, override_args=None):
     models, model_args, task = checkpoint_utils.load_model_ensemble_and_task(
         [args.path],
         arg_overrides=overrides,
-        suffix=getattr(args, "checkpoint_suffix", ""),
     )
     model = models[0]
 
@@ -61,9 +59,10 @@ def main(args, override_args=None):
     criterion = task.build_criterion(model_args)
     criterion.eval()
 
+    # Load valid dataset (we load training data below, based on the latest checkpoint)
     for subset in args.valid_subset.split(','):
         try:
-            task.load_dataset(subset, combine=False, epoch=1)
+            task.load_dataset(subset, combine=False, epoch=0)
             dataset = task.dataset(subset)
         except KeyError:
             raise Exception('Cannot find dataset: ' + subset)
@@ -106,15 +105,13 @@ def main(args, override_args=None):
 
 def cli_main():
     parser = options.get_validation_parser()
-    add_distributed_training_args(parser)
     args = options.parse_args_and_arch(parser)
 
     # only override args that are explicitly given on the command line
     override_parser = options.get_validation_parser()
-    add_distributed_training_args(override_parser)
     override_args = options.parse_args_and_arch(override_parser, suppress_defaults=True)
 
-    distributed_utils.call_main(args, main, override_args=override_args)
+    main(args, override_args)
 
 
 if __name__ == '__main__':

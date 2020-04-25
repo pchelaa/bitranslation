@@ -58,17 +58,16 @@ def get_dummy_task_and_parser():
     return task, parser
 
 
-def _test_save_and_load(scripted_module):
-    with tempfile.NamedTemporaryFile() as f:
-        scripted_module.save(f.name)
-        torch.jit.load(f.name)
-
-
 class TestExportModels(unittest.TestCase):
+    def _test_save_and_load(self, scripted_module):
+        with tempfile.NamedTemporaryFile() as f:
+            scripted_module.save(f.name)
+            torch.jit.load(f.name)
+
     def test_export_multihead_attention(self):
         module = multihead_attention.MultiheadAttention(embed_dim=8, num_heads=2)
         scripted = torch.jit.script(module)
-        _test_save_and_load(scripted)
+        self._test_save_and_load(scripted)
 
     def test_incremental_state_multihead_attention(self):
         module1 = multihead_attention.MultiheadAttention(embed_dim=8, num_heads=2)
@@ -90,7 +89,7 @@ class TestExportModels(unittest.TestCase):
             embedding_dim=8, padding_idx=1
         )
         scripted = torch.jit.script(module)
-        _test_save_and_load(scripted)
+        self._test_save_and_load(scripted)
 
     @unittest.skipIf(
         torch.__version__ < "1.5.0", "Targeting OSS scriptability for the 1.5 release"
@@ -101,7 +100,7 @@ class TestExportModels(unittest.TestCase):
         args = parser.parse_args([])
         model = TransformerModel.build_model(args, task)
         scripted = torch.jit.script(model)
-        _test_save_and_load(scripted)
+        self._test_save_and_load(scripted)
 
 
 if __name__ == "__main__":

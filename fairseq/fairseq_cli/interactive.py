@@ -112,7 +112,7 @@ def main(args):
             model.cuda()
 
     # Initialize generator
-    generator = task.build_generator(models, args)
+    generator = task.build_generator(args)
 
     # Handle tokenization and BPE
     tokenizer = encoders.build_tokenizer(args)
@@ -182,12 +182,9 @@ def main(args):
                     tgt_dict=tgt_dict,
                     remove_bpe=args.remove_bpe,
                 )
-                detok_hypo_str = decode_fn(hypo_str)
+                hypo_str = decode_fn(hypo_str)
                 score = hypo['score'] / math.log(2)  # convert to base 2
-                # original hypothesis (after tokenization and BPE)
                 print('H-{}\t{}\t{}'.format(id, score, hypo_str))
-                # detokenized hypothesis
-                print('D-{}\t{}\t{}'.format(id, score, detok_hypo_str))
                 print('P-{}\t{}'.format(
                     id,
                     ' '.join(map(
