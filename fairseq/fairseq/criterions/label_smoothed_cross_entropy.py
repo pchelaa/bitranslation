@@ -16,8 +16,9 @@ def label_smoothed_nll_loss(lprobs, target, epsilon, ignore_index=None, reduce=T
     smooth_loss = -lprobs.sum(dim=-1, keepdim=True)
     if ignore_index is not None:
         pad_mask = target.eq(ignore_index)
-        nll_loss.masked_fill_(pad_mask, 0.)
-        smooth_loss.masked_fill_(pad_mask, 0.)
+        if pad_mask.any():
+            nll_loss.masked_fill_(pad_mask, 0.)
+            smooth_loss.masked_fill_(pad_mask, 0.)
     else:
         nll_loss = nll_loss.squeeze(-1)
         smooth_loss = smooth_loss.squeeze(-1)
@@ -29,13 +30,12 @@ def label_smoothed_nll_loss(lprobs, target, epsilon, ignore_index=None, reduce=T
     return loss, nll_loss
 
 
-@register_criterion('label_smoothed_cross_entropy')
+@register_criterion('label_smoothed_cross_entropy_with_kl')
 class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
 
-    def __init__(self, task, sentence_avg, label_smoothing):
-        super().__init__(task)
-        self.sentence_avg = sentence_avg
-        self.eps = label_smoothing
+    def __init__(self, args, task):
+        super().__init__(args, task)
+        self.eps = args.label_smoothing
 
     @staticmethod
     def add_args(parser):
@@ -53,9 +53,10 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
         2) the sample size, which is used as the denominator for the gradient
         3) logging outputs to display while training
         """
-        net_output = model(**sample['net_input'])
-        loss, nll_loss = self.compute_loss(model, net_output, sample, reduce=reduce)
-        sample_size = sample['target'].size(0) if self.sentence_avg else sample['ntokens']
+        encoder_output, decoder_output = model(**sample['net_input'])
+        loss, nll_loss = self.compute_rec_loss(model, decoder_output, sample, reduce=reduce)
+        kl_loss = self.compute_kl_loss(model, encoder_output, decoder_output)
+        sample_size = sample['target'].size(0) if self.args.sentence_avg else sample['ntokens']
         logging_output = {
             'loss': loss.data,
             'nll_loss': nll_loss.data,
@@ -65,22 +66,30 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
         }
         return loss, sample_size, logging_output
 
-    def compute_loss(self, model, net_output, sample, reduce=True):
-        lprobs = model.get_normalized_probs(net_output, log_probs=True)
+    def compute_rec_loss(self, model, decoder_output, sample, reduce=True):
+        lprobs = model.get_normalized_probs(decoder_output, log_probs=True)
         lprobs = lprobs.view(-1, lprobs.size(-1))
-        target = model.get_targets(sample, net_output).view(-1, 1)
+        target = model.get_targets(sample, decoder_output).view(-1, 1)
         loss, nll_loss = label_smoothed_nll_loss(
             lprobs, target, self.eps, ignore_index=self.padding_idx, reduce=reduce,
         )
         return loss, nll_loss
 
+    def compute_kl_loss(self, model, encoder_output, decoder_output):
+        ####### log_probs_posterior = ?
+        log_probs_prior = model.get_prior_log_probability(
+            encoder_output, decoder_output, log_probs=True
+        )
+        KL = (log_probs_posterior - log_probs_prior).mean(dim=1)
+        return KL
+
     @staticmethod
     def reduce_metrics(logging_outputs) -> None:
         """Aggregate logging outputs from data parallel training."""
-        loss_sum = sum(log.get('loss', 0) for log in logging_outputs)
-        nll_loss_sum = sum(log.get('nll_loss', 0) for log in logging_outputs)
-        ntokens = sum(log.get('ntokens', 0) for log in logging_outputs)
-        sample_size = sum(log.get('sample_size', 0) for log in logging_outputs)
+        loss_sum = utils.item(sum(log.get('loss', 0) for log in logging_outputs))
+        nll_loss_sum = utils.item(sum(log.get('nll_loss', 0) for log in logging_outputs))
+        ntokens = utils.item(sum(log.get('ntokens', 0) for log in logging_outputs))
+        sample_size = utils.item(sum(log.get('sample_size', 0) for log in logging_outputs))
 
         metrics.log_scalar('loss', loss_sum / sample_size / math.log(2), sample_size, round=3)
         metrics.log_scalar('nll_loss', nll_loss_sum / ntokens / math.log(2), ntokens, round=3)
