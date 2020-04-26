@@ -27,26 +27,22 @@ from fairseq.modules import (
     TransformerEncoderLayer,
 )
 from torch import Tensor
-from prior import Prior
 
 
 DEFAULT_MAX_SOURCE_POSITIONS = 1024
 DEFAULT_MAX_TARGET_POSITIONS = 1024
 
 
-@register_model("transformer_with_flow")
-class TransformerWithFlowModel(FairseqEncoderDecoderModel):
+@register_model("transformer")
+class TransformerModel(FairseqEncoderDecoderModel):
     """
     Transformer model from `"Attention Is All You Need" (Vaswani, et al, 2017)
     <https://arxiv.org/abs/1706.03762>`_.
-
     Args:
         encoder (TransformerEncoder): the encoder
         decoder (TransformerDecoder): the decoder
-
     The Transformer model provides the following named architectures and
     command-line arguments:
-
     .. argparse::
         :ref: fairseq.models.transformer_parser
         :prog:
@@ -85,11 +81,10 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
         }
         # fmt: on
 
-    def __init__(self, args, encoder, decoder, prior):
+    def __init__(self, args, encoder, decoder):
         super().__init__(encoder, decoder)
         self.args = args
         self.supports_align_args = True
-        self.prior = prior
 
     @staticmethod
     def add_args(parser):
@@ -223,8 +218,7 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
 
         encoder = cls.build_encoder(args, src_dict, encoder_embed_tokens)
         decoder = cls.build_decoder(args, tgt_dict, decoder_embed_tokens)
-        prior = cls.build_prior(args)
-        return cls(args, encoder, decoder, prior)
+        return cls(args, encoder, decoder)
 
     @classmethod
     def build_encoder(cls, args, src_dict, embed_tokens):
@@ -238,37 +232,6 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
             embed_tokens,
             no_encoder_attn=getattr(args, "no_cross_attention", False),
         )
-
-    @classmethod
-    def build_prior(cls, args):
-        prior_params = {
-            "type": "normal",
-            "length_predictor": {
-                "type": "diff_softmax",
-                "diff_range": 16,
-                "dropout": 0.33,
-                "label_smoothing": 0.1
-            },
-            "flow": {
-                "levels": 3,
-                "num_steps": [4, 2, 2],
-                "factors": [2, 2],
-                "hidden_features": 256,
-                "transform": "affine",
-                "coupling_type": "rnn",
-                "rnn_mode": "LSTM",
-                "dropout": 0.0,
-                "inverse": True
-            }
-        }
-        max_src_length = 64
-        latent_dim = 256
-        prior_params['flow']['features'] = latent_dim
-        prior_params['flow']['src_features'] = latent_dim
-        prior_params['length_predictor']['features'] = latent_dim
-        prior_params['length_predictor']['max_src_length'] = max_src_length
-
-        return Prior.by_name(prior_params.pop('type')).from_params(prior_params)
 
     # TorchScript doesn't support optional arguments with variable length (**kwargs).
     # Current workaround is to add union of all arguments in child classes.
@@ -285,7 +248,6 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
     ):
         """
         Run the forward pass for an encoder-decoder model.
-
         Copied from the base class, but without ``**kwargs``,
         which are not supported by TorchScript.
         """
@@ -304,7 +266,7 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
         )
-        return encoder_out, decoder_out
+        return decoder_out
 
     # Since get_normalized_probs is in the Fairseq Model which is not scriptable,
     # I rewrite the get_normalized_probs from Base Class to call the
@@ -319,29 +281,6 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
         """Get normalized probabilities (or log probs) from a net's output."""
         return self.get_normalized_probs_scriptable(net_output, log_probs, sample)
 
-    # MY_CHANGES:
-    @torch.jit.export
-    def get_prior_log_probability(
-        self,
-        enc_output: EncoderOut,
-        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
-        log_probs: bool,
-        sample: Optional[Dict[str, Tensor]] = None,
-    ):
-        z = net_output[1]['z']
-        return self.prior.log_probability(
-            z,
-            torch.ones_like(z, device=z.device),  # mask of ones shaped as z - target
-            enc_output['encoder_out'].transpose(0, 1),
-            enc_output['encoder_padding_mask'],
-        )
-
-        # return EncoderOut(
-        #     encoder_out=x,  # T x B x C
-        #     encoder_padding_mask=encoder_padding_mask,  # B x T
-        #     encoder_embedding=encoder_embedding,  # B x T x C
-        #     encoder_states=encoder_states,  # List[T x B x C]
-        # )
 
 @register_model("transformer_align")
 class TransformerAlignModel(TransformerModel):
@@ -414,7 +353,6 @@ class TransformerEncoder(FairseqEncoder):
     """
     Transformer encoder consisting of *args.encoder_layers* layers. Each layer
     is a :class:`TransformerEncoderLayer`.
-
     Args:
         args (argparse.Namespace): parsed command-line arguments
         dictionary (~fairseq.data.Dictionary): encoding dictionary
@@ -489,7 +427,6 @@ class TransformerEncoder(FairseqEncoder):
                 shape `(batch)`
             return_all_hiddens (bool, optional): also return all of the
                 intermediate hidden states (default: False).
-
         Returns:
             namedtuple:
                 - **encoder_out** (Tensor): the last encoder layer's output of
@@ -541,11 +478,9 @@ class TransformerEncoder(FairseqEncoder):
     def reorder_encoder_out(self, encoder_out: EncoderOut, new_order):
         """
         Reorder encoder output according to *new_order*.
-
         Args:
             encoder_out: output from the ``forward()`` method
             new_order (LongTensor): desired order
-
         Returns:
             *encoder_out* rearranged according to *new_order*
         """
@@ -630,7 +565,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
     """
     Transformer decoder consisting of *args.decoder_layers* layers. Each layer
     is a :class:`TransformerDecoderLayer`.
-
     Args:
         args (argparse.Namespace): parsed command-line arguments
         dictionary (~fairseq.data.Dictionary): decoding dictionary
@@ -745,7 +679,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 :ref:`Incremental decoding`
             features_only (bool, optional): only return features without
                 applying output layer (default: False).
-
         Returns:
             tuple:
                 - the decoder's output of shape `(batch, tgt_len, vocab)`
@@ -773,10 +706,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
     ):
         """
         Similar to *forward* but only return features.
-
         Includes several features from "Jointly Learning to Align and
         Translate with Transformer Models" (Garg et al., EMNLP 2019).
-
         Args:
             full_context_alignment (bool, optional): don't apply
                 auto-regressive mask to self-attention (default: False).
@@ -784,7 +715,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 heads at this layer (default: last layer).
             alignment_heads (int, optional): only average alignment over
                 this many heads (default: all heads).
-
         Returns:
             tuple:
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
@@ -831,8 +761,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         # decoder layers
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
-
-        # Эти лэйеры исполняются подряд, друг за другом?
         for idx, layer in enumerate(self.layers):
             encoder_state: Optional[Tensor] = None
             if encoder_out is not None:
@@ -851,8 +779,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             # add LayerDrop (see https://arxiv.org/abs/1909.11556 for description)
             dropout_probability = torch.empty(1).uniform_()
             if not self.training or (dropout_probability > self.decoder_layerdrop):
-                # MY_CHANGES:
-                x, layer_attn, _, z = layer(
+                x, layer_attn, _ = layer(
                     x,
                     encoder_state,
                     encoder_out.encoder_padding_mask
@@ -874,9 +801,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
             # average probabilities over heads
             attn = attn.mean(dim=0)
-        # MY_CHANGES:
-        if z is not None:
-            z = z.mean(dim=0)
 
         if self.layer_norm is not None:
             x = self.layer_norm(x)
@@ -886,8 +810,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
-        # MY_CHANGES:
-        return x, {"attn": [attn], "inner_states": inner_states, "z": z}
+
+        return x, {"attn": [attn], "inner_states": inner_states}
 
     def output_layer(self, features):
         """Project features to the vocabulary size."""
@@ -971,7 +895,7 @@ def Linear(in_features, out_features, bias=True):
     return m
 
 
-@register_model_architecture("transformer_with_flow", "transformer_with_flow")
+@register_model_architecture("transformer", "transformer")
 def base_architecture(args):
     args.encoder_embed_path = getattr(args, "encoder_embed_path", None)
     args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 512)
@@ -1014,3 +938,72 @@ def base_architecture(args):
 
     args.no_scale_embedding = getattr(args, "no_scale_embedding", False)
     args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
+
+
+@register_model_architecture("transformer", "transformer_iwslt_de_en")
+def transformer_iwslt_de_en(args):
+    args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 512)
+    args.encoder_ffn_embed_dim = getattr(args, "encoder_ffn_embed_dim", 1024)
+    args.encoder_attention_heads = getattr(args, "encoder_attention_heads", 4)
+    args.encoder_layers = getattr(args, "encoder_layers", 6)
+    args.decoder_embed_dim = getattr(args, "decoder_embed_dim", 512)
+    args.decoder_ffn_embed_dim = getattr(args, "decoder_ffn_embed_dim", 1024)
+    args.decoder_attention_heads = getattr(args, "decoder_attention_heads", 4)
+    args.decoder_layers = getattr(args, "decoder_layers", 6)
+    base_architecture(args)
+
+
+@register_model_architecture("transformer", "transformer_wmt_en_de")
+def transformer_wmt_en_de(args):
+    base_architecture(args)
+
+
+# parameters used in the "Attention Is All You Need" paper (Vaswani et al., 2017)
+@register_model_architecture("transformer", "transformer_vaswani_wmt_en_de_big")
+def transformer_vaswani_wmt_en_de_big(args):
+    args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 1024)
+    args.encoder_ffn_embed_dim = getattr(args, "encoder_ffn_embed_dim", 4096)
+    args.encoder_attention_heads = getattr(args, "encoder_attention_heads", 16)
+    args.encoder_normalize_before = getattr(args, "encoder_normalize_before", False)
+    args.decoder_embed_dim = getattr(args, "decoder_embed_dim", 1024)
+    args.decoder_ffn_embed_dim = getattr(args, "decoder_ffn_embed_dim", 4096)
+    args.decoder_attention_heads = getattr(args, "decoder_attention_heads", 16)
+    args.dropout = getattr(args, "dropout", 0.3)
+    base_architecture(args)
+
+
+@register_model_architecture("transformer", "transformer_vaswani_wmt_en_fr_big")
+def transformer_vaswani_wmt_en_fr_big(args):
+    args.dropout = getattr(args, "dropout", 0.1)
+    transformer_vaswani_wmt_en_de_big(args)
+
+
+@register_model_architecture("transformer", "transformer_wmt_en_de_big")
+def transformer_wmt_en_de_big(args):
+    args.attention_dropout = getattr(args, "attention_dropout", 0.1)
+    transformer_vaswani_wmt_en_de_big(args)
+
+
+# default parameters used in tensor2tensor implementation
+@register_model_architecture("transformer", "transformer_wmt_en_de_big_t2t")
+def transformer_wmt_en_de_big_t2t(args):
+    args.encoder_normalize_before = getattr(args, "encoder_normalize_before", True)
+    args.decoder_normalize_before = getattr(args, "decoder_normalize_before", True)
+    args.attention_dropout = getattr(args, "attention_dropout", 0.1)
+    args.activation_dropout = getattr(args, "activation_dropout", 0.1)
+    transformer_vaswani_wmt_en_de_big(args)
+
+
+@register_model_architecture("transformer_align", "transformer_align")
+def transformer_align(args):
+    args.alignment_heads = getattr(args, "alignment_heads", 1)
+    args.alignment_layer = getattr(args, "alignment_layer", 4)
+    args.full_context_alignment = getattr(args, "full_context_alignment", False)
+    base_architecture(args)
+
+
+@register_model_architecture("transformer_align", "transformer_wmt_en_de_big_align")
+def transformer_wmt_en_de_big_align(args):
+    args.alignment_heads = getattr(args, "alignment_heads", 1)
+    args.alignment_layer = getattr(args, "alignment_layer", 4)
+    transformer_wmt_en_de_big(args)

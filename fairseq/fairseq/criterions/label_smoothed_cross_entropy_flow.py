@@ -7,10 +7,30 @@ import math
 
 from fairseq import metrics, utils
 from fairseq.criterions import FairseqCriterion, register_criterion
-from fairseq.criterions.label_smoothed_cross_entropy import label_smoothed_nll_loss
 
 
-@register_criterion('label_smoothed_cross_entropy')
+def label_smoothed_nll_loss(lprobs, target, epsilon, ignore_index=None, reduce=True):
+    if target.dim() == lprobs.dim() - 1:
+        target = target.unsqueeze(-1)
+    nll_loss = -lprobs.gather(dim=-1, index=target)
+    smooth_loss = -lprobs.sum(dim=-1, keepdim=True)
+    if ignore_index is not None:
+        pad_mask = target.eq(ignore_index)
+        if pad_mask.any():
+            nll_loss.masked_fill_(pad_mask, 0.)
+            smooth_loss.masked_fill_(pad_mask, 0.)
+    else:
+        nll_loss = nll_loss.squeeze(-1)
+        smooth_loss = smooth_loss.squeeze(-1)
+    if reduce:
+        nll_loss = nll_loss.sum()
+        smooth_loss = smooth_loss.sum()
+    eps_i = epsilon / lprobs.size(-1)
+    loss = (1. - epsilon) * nll_loss + eps_i * smooth_loss
+    return loss, nll_loss
+
+
+@register_criterion('label_smoothed_cross_entropy_with_kl')
 class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
 
     def __init__(self, args, task):
@@ -33,8 +53,9 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
         2) the sample size, which is used as the denominator for the gradient
         3) logging outputs to display while training
         """
-        net_output = model(**sample['net_input'])
-        loss, nll_loss = self.compute_loss(model, net_output, sample, reduce=reduce)
+        encoder_output, decoder_output = model(**sample['net_input'])
+        loss, nll_loss = self.compute_rec_loss(model, decoder_output, sample, reduce=reduce)
+        kl_loss = self.compute_kl_loss(model, encoder_output, decoder_output)
         sample_size = sample['target'].size(0) if self.args.sentence_avg else sample['ntokens']
         logging_output = {
             'loss': loss.data,
@@ -45,14 +66,22 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
         }
         return loss, sample_size, logging_output
 
-    def compute_loss(self, model, net_output, sample, reduce=True):
-        lprobs = model.get_normalized_probs(net_output, log_probs=True)
+    def compute_rec_loss(self, model, decoder_output, sample, reduce=True):
+        lprobs = model.get_normalized_probs(decoder_output, log_probs=True)
         lprobs = lprobs.view(-1, lprobs.size(-1))
-        target = model.get_targets(sample, net_output).view(-1, 1)
+        target = model.get_targets(sample, decoder_output).view(-1, 1)
         loss, nll_loss = label_smoothed_nll_loss(
             lprobs, target, self.eps, ignore_index=self.padding_idx, reduce=reduce,
         )
         return loss, nll_loss
+
+    def compute_kl_loss(self, model, encoder_output, decoder_output):
+        ####### log_probs_posterior = ?
+        log_probs_prior = model.get_prior_log_probability(
+            encoder_output, decoder_output, log_probs=True
+        )
+        KL = (log_probs_posterior - log_probs_prior).mean(dim=1)
+        return KL
 
     @staticmethod
     def reduce_metrics(logging_outputs) -> None:
