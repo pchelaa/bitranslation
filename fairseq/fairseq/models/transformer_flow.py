@@ -27,7 +27,7 @@ from fairseq.modules import (
     TransformerEncoderLayer,
 )
 from torch import Tensor
-from prior import Prior
+from flownmt.modules.priors.prior import Prior
 
 
 DEFAULT_MAX_SOURCE_POSITIONS = 1024

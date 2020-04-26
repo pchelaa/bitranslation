@@ -11,7 +11,7 @@ from fairseq.criterions.label_smoothed_cross_entropy import label_smoothed_nll_l
 
 
 @register_criterion('label_smoothed_cross_entropy_with_kl')
-class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
+class LabelSmoothedCrossEntropyCriterionWithKL(FairseqCriterion):
 
     def __init__(self, args, task):
         super().__init__(args, task)
