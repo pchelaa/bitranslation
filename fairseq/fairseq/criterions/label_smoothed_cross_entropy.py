@@ -47,6 +47,7 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
 
     def forward(self, model, sample, reduce=True):
         """Compute the loss for the given sample.
+
         Returns a tuple with three elements:
         1) the loss
         2) the sample size, which is used as the denominator for the gradient

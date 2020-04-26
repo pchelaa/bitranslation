@@ -15,6 +15,7 @@ from torch import Tensor
 
 class TransformerEncoderLayer(nn.Module):
     """Encoder layer block.
+
     In the original paper each operation (multi-head attention or FFN) is
     postprocessed with: `dropout -> add residual -> layernorm`. In the
     tensor2tensor code they suggest that learning is more robust when
@@ -22,6 +23,7 @@ class TransformerEncoderLayer(nn.Module):
     `dropout -> add residual`. We default to the approach in the paper, but the
     tensor2tensor approach can be enabled by setting
     *args.encoder_normalize_before* to ``True``.
+
     Args:
         args (argparse.Namespace): parsed command-line arguments
     """
@@ -75,6 +77,7 @@ class TransformerEncoderLayer(nn.Module):
             attn_mask[t_tgt, t_src] = 1 means when calculating embedding
             for t_tgt, t_src is excluded (or masked out), =0 means it is
             included in attention
+
         Returns:
             encoded output of shape `(seq_len, batch, embed_dim)`
         """
@@ -117,6 +120,7 @@ class TransformerEncoderLayer(nn.Module):
 
 class TransformerDecoderLayer(nn.Module):
     """Decoder layer block.
+
     In the original paper each operation (multi-head attention, encoder
     attention or FFN) is postprocessed with: `dropout -> add residual ->
     layernorm`. In the tensor2tensor code they suggest that learning is more
@@ -124,6 +128,7 @@ class TransformerDecoderLayer(nn.Module):
     `dropout -> add residual`. We default to the approach in the paper, but the
     tensor2tensor approach can be enabled by setting
     *args.decoder_normalize_before* to ``True``.
+
     Args:
         args (argparse.Namespace): parsed command-line arguments
         no_encoder_attn (bool, optional): whether to attend to encoder outputs
@@ -207,6 +212,7 @@ class TransformerDecoderLayer(nn.Module):
             need_attn (bool, optional): return attention weights
             need_head_weights (bool, optional): return attention weights
                 for each head (default: return average over heads).
+
         Returns:
             encoded output of shape `(seq_len, batch, embed_dim)`
         """

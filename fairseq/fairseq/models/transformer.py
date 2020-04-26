@@ -38,11 +38,14 @@ class TransformerModel(FairseqEncoderDecoderModel):
     """
     Transformer model from `"Attention Is All You Need" (Vaswani, et al, 2017)
     <https://arxiv.org/abs/1706.03762>`_.
+
     Args:
         encoder (TransformerEncoder): the encoder
         decoder (TransformerDecoder): the decoder
+
     The Transformer model provides the following named architectures and
     command-line arguments:
+
     .. argparse::
         :ref: fairseq.models.transformer_parser
         :prog:
@@ -248,6 +251,7 @@ class TransformerModel(FairseqEncoderDecoderModel):
     ):
         """
         Run the forward pass for an encoder-decoder model.
+
         Copied from the base class, but without ``**kwargs``,
         which are not supported by TorchScript.
         """
@@ -353,6 +357,7 @@ class TransformerEncoder(FairseqEncoder):
     """
     Transformer encoder consisting of *args.encoder_layers* layers. Each layer
     is a :class:`TransformerEncoderLayer`.
+
     Args:
         args (argparse.Namespace): parsed command-line arguments
         dictionary (~fairseq.data.Dictionary): encoding dictionary
@@ -427,6 +432,7 @@ class TransformerEncoder(FairseqEncoder):
                 shape `(batch)`
             return_all_hiddens (bool, optional): also return all of the
                 intermediate hidden states (default: False).
+
         Returns:
             namedtuple:
                 - **encoder_out** (Tensor): the last encoder layer's output of
@@ -478,9 +484,11 @@ class TransformerEncoder(FairseqEncoder):
     def reorder_encoder_out(self, encoder_out: EncoderOut, new_order):
         """
         Reorder encoder output according to *new_order*.
+
         Args:
             encoder_out: output from the ``forward()`` method
             new_order (LongTensor): desired order
+
         Returns:
             *encoder_out* rearranged according to *new_order*
         """
@@ -565,6 +573,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
     """
     Transformer decoder consisting of *args.decoder_layers* layers. Each layer
     is a :class:`TransformerDecoderLayer`.
+
     Args:
         args (argparse.Namespace): parsed command-line arguments
         dictionary (~fairseq.data.Dictionary): decoding dictionary
@@ -679,6 +688,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 :ref:`Incremental decoding`
             features_only (bool, optional): only return features without
                 applying output layer (default: False).
+
         Returns:
             tuple:
                 - the decoder's output of shape `(batch, tgt_len, vocab)`
@@ -706,8 +716,10 @@ class TransformerDecoder(FairseqIncrementalDecoder):
     ):
         """
         Similar to *forward* but only return features.
+
         Includes several features from "Jointly Learning to Align and
         Translate with Transformer Models" (Garg et al., EMNLP 2019).
+
         Args:
             full_context_alignment (bool, optional): don't apply
                 auto-regressive mask to self-attention (default: False).
@@ -715,6 +727,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 heads at this layer (default: last layer).
             alignment_heads (int, optional): only average alignment over
                 this many heads (default: all heads).
+
         Returns:
             tuple:
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
