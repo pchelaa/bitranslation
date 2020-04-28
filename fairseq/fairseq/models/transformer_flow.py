@@ -253,7 +253,8 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
                 "levels": 3,
                 "num_steps": [4, 2, 2],
                 "factors": [2, 2],
-                "hidden_features": 256,
+                "hidden_features": args.decoder_embed_dim,
+                # "hidden_features": 256,
                 "transform": "affine",
                 "coupling_type": "rnn",
                 "rnn_mode": "LSTM",
@@ -261,8 +262,8 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
                 "inverse": True
             }
         }
-        max_src_length = 64
-        latent_dim = 256
+        max_src_length = args.max_source_positions
+        latent_dim = args.decoder_embed_dim
         prior_params['flow']['features'] = latent_dim
         prior_params['flow']['src_features'] = latent_dim
         prior_params['length_predictor']['features'] = latent_dim
@@ -295,6 +296,19 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
             cls_input=cls_input,
             return_all_hiddens=return_all_hiddens,
         )
+
+        # MY_CHANGES:
+        if not self.training:
+            z, log_probs = self.prior.sample(
+                encoder_out.encoder_out.transpose(0, 1),
+                encoder_out.encoder_padding_mask,
+                nsamples=1,
+                # tau=tau, include_zero=include_zero
+            )
+        else:
+            batch_size = encoder_out.encoder_out.size(1)
+            z = 0.5 * encoder_out.encoder_out.new_ones(batch_size, self.args.decoder_embed_dim)
+
         decoder_out = self.decoder(
             prev_output_tokens,
             encoder_out=encoder_out,
@@ -304,7 +318,11 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
         )
-        return encoder_out, decoder_out
+
+        if self.training:
+            return encoder_out, decoder_out, z
+        else:
+            return decoder_out
 
     # Since get_normalized_probs is in the Fairseq Model which is not scriptable,
     # I rewrite the get_normalized_probs from Base Class to call the
@@ -325,15 +343,15 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
         self,
         enc_output: EncoderOut,
         net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+        z,
         log_probs: bool,
         sample: Optional[Dict[str, Tensor]] = None,
     ):
-        z = net_output[1]['z']
         return self.prior.log_probability(
             z,
             torch.ones_like(z, device=z.device),  # mask of ones shaped as z - target
-            enc_output['encoder_out'].transpose(0, 1),
-            enc_output['encoder_padding_mask'],
+            enc_output.encoder_out.transpose(0, 1),
+            enc_output.encoder_padding_mask,
         )
 
         # return EncoderOut(
@@ -741,6 +759,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             if positions is not None:
                 positions = positions[:, -1:]
 
+
+        # z should be somewhere here
         # embed tokens and positions
         x = self.embed_scale * self.embed_tokens(prev_output_tokens)
 
@@ -786,7 +806,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             dropout_probability = torch.empty(1).uniform_()
             if not self.training or (dropout_probability > self.decoder_layerdrop):
                 # MY_CHANGES:
-                x, layer_attn, _, z = layer(
+                x, layer_attn, _ = layer(
                     x,
                     encoder_state,
                     encoder_out.encoder_padding_mask
@@ -808,9 +828,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
             # average probabilities over heads
             attn = attn.mean(dim=0)
-        # MY_CHANGES:
-        if z is not None:
-            z = z.mean(dim=0)
 
         if self.layer_norm is not None:
             x = self.layer_norm(x)
@@ -821,7 +838,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
         # MY_CHANGES:
-        return x, {"attn": [attn], "inner_states": inner_states, "z": z}
+        return x, {"attn": [attn], "inner_states": inner_states}
 
     def output_layer(self, features):
         """Project features to the vocabulary size."""

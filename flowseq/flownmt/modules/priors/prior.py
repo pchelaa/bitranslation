@@ -86,8 +86,8 @@ class Prior(nn.Module):
         log_probs = log_probs.view(z.size(0), -1).sum(dim=1).mul(-0.5) + logdet
         return z, log_probs
 
-    def sample(self, nlengths: int, nsamples: int, src: torch.Tensor,
-               ctx: torch.Tensor, src_mask: torch.Tensor,
+    def sample(self, src: torch.Tensor,
+               src_mask: torch.Tensor,  nsamples = 1,
                tau=0.0, include_zero=False) -> Tuple[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         """
 
@@ -119,19 +119,26 @@ class Prior(nn.Module):
 
         """
         batch = src.size(0)
-        batch_nlen = batch * nlengths
+        # batch_nlen = batch * nlengths
         # [batch, nlenths]
-        lengths, log_probs_length = self.predict_length(ctx, src_mask, topk=nlengths)
+        # lengths, log_probs_length = self.predict_length(ctx, src_mask, topk=nlengths)
         # [batch * nlengths]
-        log_probs_length = log_probs_length.view(-1)
-        lengths = lengths.view(-1)
-        max_length = lengths.max().item()
+        # log_probs_length = log_probs_length.view(-1)
+        # lengths = lengths.view(-1)
+        # max_length = lengths.max().item()
         # [batch * nlengths, max_length]
-        tgt_mask = torch.arange(max_length).to(src.device).unsqueeze(0).expand(batch_nlen, max_length).lt(lengths.unsqueeze(1)).float()
+        # tgt_mask = torch.arange(max_length).to(src.device).unsqueeze(0).expand(batch_nlen, max_length).lt(lengths.unsqueeze(1)).float()
 
+
+        # MY_CHANGES:
+        batch_nlen = batch
+        nlengths = 1
+        # lengths = src.new_ones(batch, 1)
+        max_length = 1
+        tgt_mask = src.new_ones(batch, 1)
         # [batch * nlengths, nsamples, tgt_length, nz]
         epsilon = src.new_empty(batch_nlen, nsamples, max_length, self.features).normal_()
-        epsilon = epsilon.mul(tgt_mask.view(batch_nlen, 1, max_length, 1)) * tau
+        # epsilon = epsilon.mul(tgt_mask.view(batch_nlen, 1, max_length, 1)) * tau
         if include_zero:
             epsilon[:, 0].zero_()
         # [batch * nlengths * nsamples, tgt_length, nz]
@@ -156,11 +163,12 @@ class Prior(nn.Module):
 
         # [batch * nlength * nsamples, tgt_length, nz]
         z, log_probs = self.decode(epsilon, tgt_mask, src, src_mask)
-        return (z, log_probs, tgt_mask), (lengths, log_probs_length), (src, ctx, src_mask)
+        # return (z, log_probs, tgt_mask), (lengths, log_probs_length), (src, ctx, src_mask)
+        return z, log_probs
 
     def log_probability(self, z: torch.Tensor, tgt_mask: torch.Tensor,
-                        src: torch.Tensor, ctx: torch.Tensor, src_mask: torch.Tensor,
-                        length_loss: bool = True) -> Tuple[torch.Tensor, Union[torch.Tensor, None]]:
+                        src: torch.Tensor, src_mask: torch.Tensor,
+                        ) -> Tuple[torch.Tensor, Union[torch.Tensor, None]]:
         """
 
         Args:
@@ -183,7 +191,8 @@ class Prior(nn.Module):
 
         """
         # [batch]
-        loss_length = self.length_loss(ctx, src_mask, tgt_mask) if length_loss else None
+        # we don't need this
+        # loss_length = self.length_loss(ctx, src_mask, tgt_mask) if length_loss else None
 
         # [batch, length, nz]
         epsilon, logdet = self.flow.bwdpass(z, tgt_mask, src, src_mask)
@@ -192,7 +201,7 @@ class Prior(nn.Module):
         # apply mask
         log_probs = log_probs.mul(tgt_mask.unsqueeze(2))
         log_probs = log_probs.view(z.size(0), -1).sum(dim=1).mul(-0.5) + logdet
-        return log_probs, loss_length
+        return log_probs
 
     def init(self, z, tgt_mask, src, src_mask, init_scale=1.0):
         return self.flow.bwdpass(z, tgt_mask, src, src_mask, init=True, init_scale=init_scale)

@@ -165,7 +165,9 @@ class NICE(Flow):
 
     @overrides
     def extra_repr(self):
-        return 'inverse={}, in_channels={}, scale={}'.format(self.inverse, self.in_channels, self.scale)
+        # return 'inverse={}, in_channels={}, scale={}'.format(self.inverse, self.in_channels, self.scale)
+        # return 'inverse={}, in_channels={}, scale={}'.format(self.inverse, 'SMTH WRONG WITH self.in_channels, Emil', 'AND THIS TOO')
+        return 'NICE class'
 
     @classmethod
     def from_params(cls, params: Dict) -> "NICE":
