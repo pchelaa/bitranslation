@@ -78,6 +78,20 @@ class FairseqDecoder(nn.Module):
         else:
             return utils.softmax(logits, dim=-1, onnx_trace=self.onnx_trace)
 
+    def get_prior_log_probability(
+        self,
+        net_output
+    ):
+        """Get prior log probabilities from a net's output."""
+        raise NotImplementedError
+
+    def get_posterior_log_probability(
+        self,
+        net_output
+    ):
+        """Get posterior log probabilities from a net's output."""
+        raise NotImplementedError
+
     def max_positions(self):
         """Maximum input length supported by the decoder."""
         return 1e6  # an arbitrary large number

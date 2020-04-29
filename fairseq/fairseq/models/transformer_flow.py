@@ -28,7 +28,7 @@ from fairseq.modules import (
 )
 from torch import Tensor
 from flownmt.modules.priors.prior import Prior
-
+from flownmt.modules.posteriors.posterior import Posterior
 
 DEFAULT_MAX_SOURCE_POSITIONS = 1024
 DEFAULT_MAX_TARGET_POSITIONS = 1024
@@ -85,11 +85,10 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
         }
         # fmt: on
 
-    def __init__(self, args, encoder, decoder, prior):
+    def __init__(self, args, encoder, decoder):
         super().__init__(encoder, decoder)
         self.args = args
         self.supports_align_args = True
-        self.prior = prior
 
     @staticmethod
     def add_args(parser):
@@ -223,12 +222,15 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
 
         encoder = cls.build_encoder(args, src_dict, encoder_embed_tokens)
         decoder = cls.build_decoder(args, tgt_dict, decoder_embed_tokens)
-        prior = cls.build_prior(args)
-        return cls(args, encoder, decoder, prior)
+
+        return cls(args, encoder, decoder)
 
     @classmethod
     def build_encoder(cls, args, src_dict, embed_tokens):
-        return TransformerEncoder(args, src_dict, embed_tokens)
+        return TransformerEncoder(
+            args,
+            src_dict,
+            embed_tokens)
 
     @classmethod
     def build_decoder(cls, args, tgt_dict, embed_tokens):
@@ -238,38 +240,6 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
             embed_tokens,
             no_encoder_attn=getattr(args, "no_cross_attention", False),
         )
-
-    @classmethod
-    def build_prior(cls, args):
-        prior_params = {
-            "type": "normal",
-            "length_predictor": {
-                "type": "diff_softmax",
-                "diff_range": 16,
-                "dropout": 0.33,
-                "label_smoothing": 0.1
-            },
-            "flow": {
-                "levels": 3,
-                "num_steps": [4, 2, 2],
-                "factors": [2, 2],
-                "hidden_features": args.decoder_embed_dim,
-                # "hidden_features": 256,
-                "transform": "affine",
-                "coupling_type": "rnn",
-                "rnn_mode": "LSTM",
-                "dropout": 0.0,
-                "inverse": True
-            }
-        }
-        max_src_length = args.max_source_positions
-        latent_dim = args.decoder_embed_dim
-        prior_params['flow']['features'] = latent_dim
-        prior_params['flow']['src_features'] = latent_dim
-        prior_params['length_predictor']['features'] = latent_dim
-        prior_params['length_predictor']['max_src_length'] = max_src_length
-
-        return Prior.by_name(prior_params.pop('type')).from_params(prior_params)
 
     # TorchScript doesn't support optional arguments with variable length (**kwargs).
     # Current workaround is to add union of all arguments in child classes.
@@ -297,18 +267,6 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
             return_all_hiddens=return_all_hiddens,
         )
 
-        # MY_CHANGES:
-        if not self.training:
-            z, log_probs = self.prior.sample(
-                encoder_out.encoder_out.transpose(0, 1),
-                encoder_out.encoder_padding_mask,
-                nsamples=1,
-                # tau=tau, include_zero=include_zero
-            )
-        else:
-            batch_size = encoder_out.encoder_out.size(1)
-            z = 0.5 * encoder_out.encoder_out.new_ones(batch_size, self.args.decoder_embed_dim)
-
         decoder_out = self.decoder(
             prev_output_tokens,
             encoder_out=encoder_out,
@@ -319,47 +277,7 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
             return_all_hiddens=return_all_hiddens,
         )
 
-        if self.training:
-            return encoder_out, decoder_out, z
-        else:
-            return decoder_out
-
-    # Since get_normalized_probs is in the Fairseq Model which is not scriptable,
-    # I rewrite the get_normalized_probs from Base Class to call the
-    # helper function in the Base Class.
-    @torch.jit.export
-    def get_normalized_probs(
-        self,
-        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
-        log_probs: bool,
-        sample: Optional[Dict[str, Tensor]] = None,
-    ):
-        """Get normalized probabilities (or log probs) from a net's output."""
-        return self.get_normalized_probs_scriptable(net_output, log_probs, sample)
-
-    # MY_CHANGES:
-    @torch.jit.export
-    def get_prior_log_probability(
-        self,
-        enc_output: EncoderOut,
-        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
-        z,
-        log_probs: bool,
-        sample: Optional[Dict[str, Tensor]] = None,
-    ):
-        return self.prior.log_probability(
-            z,
-            torch.ones_like(z, device=z.device),  # mask of ones shaped as z - target
-            enc_output.encoder_out.transpose(0, 1),
-            enc_output.encoder_padding_mask,
-        )
-
-        # return EncoderOut(
-        #     encoder_out=x,  # T x B x C
-        #     encoder_padding_mask=encoder_padding_mask,  # B x T
-        #     encoder_embedding=encoder_embedding,  # B x T x C
-        #     encoder_states=encoder_states,  # List[T x B x C]
-        # )
+        return decoder_out
 
 
 class TransformerEncoder(FairseqEncoder):
@@ -596,6 +514,9 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         self.register_buffer("version", torch.Tensor([3]))
         self._future_mask = torch.empty(0)
 
+        self.prior = self.build_prior(args)
+        self.posterior = self.build_posterior(args, dictionary)
+
         self.dropout = args.dropout
         self.decoder_layerdrop = args.decoder_layerdrop
         self.share_input_output_embed = args.share_decoder_input_output_embed
@@ -676,6 +597,98 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         else:
             self.layernorm_embedding = None
 
+    @classmethod
+    def build_prior(self, args):
+        prior_params = {
+            "type": "normal",
+            "length_predictor": {
+                "type": "diff_softmax",
+                "diff_range": 16,
+                "dropout": 0.33,
+                "label_smoothing": 0.1
+            },
+            "flow": {
+                "levels": 3,
+                "num_steps": [4, 2, 2],
+                "factors": [2, 2],
+                "hidden_features": args.decoder_embed_dim,
+                # "hidden_features": 256,
+                "transform": "affine",
+                "coupling_type": "rnn",
+                "rnn_mode": "LSTM",
+                "dropout": 0.0,
+                "inverse": True
+            }
+        }
+        max_src_length = args.max_source_positions
+        latent_dim = args.decoder_embed_dim
+        prior_params['flow']['features'] = latent_dim
+        prior_params['flow']['src_features'] = latent_dim
+        prior_params['length_predictor']['features'] = latent_dim
+        prior_params['length_predictor']['max_src_length'] = max_src_length
+
+        return Prior.by_name(prior_params.pop('type')).from_params(prior_params)
+
+    @classmethod
+    def build_posterior(self, args, dictionary):
+        posterior_params = {
+            "type": "rnn",
+            "rnn_mode": "LSTM",
+            "num_layers": 2,
+            "use_attn": True,
+            "dropout": 0.33,
+            "dropword": 0.2
+        }
+
+        posterior_params['vocab_size'] = len(dictionary)
+        posterior_params['padding_idx'] = dictionary.pad()
+        posterior_params['embed_dim'] = args.decoder_embed_dim
+        posterior_params['latent_dim'] = args.decoder_embed_dim
+        posterior_params['hidden_size'] = args.decoder_embed_dim
+
+        return Posterior.by_name(posterior_params.pop('type')).from_params(posterior_params)
+
+    # Since get_normalized_probs is in the Fairseq Model which is not scriptable,
+    # I rewrite the get_normalized_probs from Base Class to call the
+    # helper function in the Base Class.
+    def get_normalized_probs(
+        self,
+        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+        log_probs: bool,
+        sample: Optional[Dict[str, Tensor]] = None,
+    ):
+        """Get normalized probabilities (or log probs) from a net's output."""
+        if hasattr(self, "adaptive_softmax") and self.adaptive_softmax is not None:
+            if sample is not None:
+                assert "target" in sample
+                target = sample["target"]
+            else:
+                target = None
+            out = self.adaptive_softmax.get_log_prob(net_output[0][0], target=target)
+            return out.exp_() if not log_probs else out
+
+        logits = net_output[0][0]
+        if log_probs:
+            return utils.log_softmax(logits, dim=-1, onnx_trace=self.onnx_trace)
+        else:
+            return utils.softmax(logits, dim=-1, onnx_trace=self.onnx_trace)
+
+    def get_prior_log_probability(
+        self,
+        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+    ):
+        """Get prior log probabilities from a net's output."""
+
+        return net_output[0][1]
+
+    def get_posterior_log_probability(
+        self,
+        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+    ):
+        """Get posterior log probabilities from a net's output."""
+
+        return net_output[0][2]
+
     def forward(
         self,
         prev_output_tokens,
@@ -711,7 +724,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             alignment_heads=alignment_heads,
         )
         if not features_only:
-            x = self.output_layer(x)
+            return (self.output_layer(x[0]), x[1], x[2]), extra
         return x, extra
 
     def extract_features(
@@ -778,6 +791,31 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
+        z, posterior_log_probs, prior_log_probs = None, None, None
+
+        if self.training:
+            if (self.padding_idx > 1):
+                z, posterior_log_probs = self.posterior.sample(
+                    prev_output_tokens,
+                    prev_output_tokens.eq(self.padding_idx),
+                    encoder_out.encoder_out.transpose(0, 1),
+                    encoder_out.encoder_padding_mask,
+                    nsamples=1
+                )
+
+                prior_log_probs = self.prior.log_probability(
+                    z,
+                    encoder_out.encoder_out.transpose(0, 1).new_ones(encoder_out.encoder_out.transpose(0, 1).size(), 1),
+                    encoder_out.encoder_out.transpose(0, 1),
+                    encoder_out.encoder_padding_mask
+                )
+        else:
+            z, prior_log_probs = self.prior.sample(
+                encoder_out.encoder_out.transpose(0, 1),
+                encoder_out.encoder_padding_mask,
+                nsamples=1
+            )
+
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.padding_idx).any():
             self_attn_padding_mask = prev_output_tokens.eq(self.padding_idx)
@@ -837,8 +875,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
-        # MY_CHANGES:
-        return x, {"attn": [attn], "inner_states": inner_states}
+
+        return (x, prior_log_probs, posterior_log_probs), {"attn": [attn], "inner_states": inner_states}
 
     def output_layer(self, features):
         """Project features to the vocabulary size."""

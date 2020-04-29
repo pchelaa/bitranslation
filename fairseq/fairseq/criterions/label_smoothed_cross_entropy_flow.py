@@ -33,47 +33,43 @@ class LabelSmoothedCrossEntropyCriterionWithKL(FairseqCriterion):
         2) the sample size, which is used as the denominator for the gradient
         3) logging outputs to display while training
         """
-        encoder_output, decoder_output, z = model(**sample['net_input'])
-        loss, nll_loss = self.compute_rec_loss(model, decoder_output, sample, reduce=reduce)
-        kl_loss = self.compute_kl_loss(model, encoder_output, decoder_output, z, reduce=reduce)
-        loss += kl_loss
+        net_output = model(**sample['net_input'])
+        loss, nll_loss = self.compute_loss(model, net_output, sample, reduce=reduce)
         sample_size = sample['target'].size(0) if self.args.sentence_avg else sample['ntokens']
         logging_output = {
             'loss': loss.data,
             'nll_loss': nll_loss.data,
-            'kl_loss': kl_loss.data,
             'ntokens': sample['ntokens'],
             'nsentences': sample['target'].size(0),
             'sample_size': sample_size,
         }
         return loss, sample_size, logging_output
 
-    def compute_rec_loss(self, model, decoder_output, sample, reduce=True):
-        lprobs = model.get_normalized_probs(decoder_output, log_probs=True)
+    def compute_loss(self, model, net_output, sample, reduce=True):
+        rec_loss, nll_loss = self.compute_rec_loss(model, net_output, sample, reduce)
+        kl_loss = self.compute_kl_loss(model, net_output, reduce)
+
+        return rec_loss + kl_loss, nll_loss
+
+    def compute_rec_loss(self, model, net_output, sample, reduce=True):
+        lprobs = model.get_normalized_probs(net_output, log_probs=True)
         lprobs = lprobs.view(-1, lprobs.size(-1))
-        target = model.get_targets(sample, decoder_output).view(-1, 1)
+        target = model.get_targets(sample, net_output).view(-1, 1)
         loss, nll_loss = label_smoothed_nll_loss(
             lprobs, target, self.eps, ignore_index=self.padding_idx, reduce=reduce,
         )
         return loss, nll_loss
 
-    # MY_CHANGES
-    def compute_kl_loss(self, model, encoder_output, decoder_output, z, reduce):
-        # DEBUG REGIME
-        if True:
-            batch_size = encoder_output.encoder_out.size(1)
-            n_samples = 5  #samples from prior
-            log_probs_prior = 0.5 * encoder_output.encoder_out.new_ones(batch_size, n_samples)
-        else:
-            log_probs_prior = model.get_prior_log_probability(
-                encoder_output, decoder_output, z, log_probs=True
-            )
+    def compute_kl_loss(self, model, net_output, reduce=True):
+        prior_log_probs = model.get_prior_log_probability(net_output)
+        posterior_log_probs = model.get_posterior_log_probability(net_output)
 
-        # THIS MUST BE CHANGED!
-        log_probs_posterior = log_probs_prior
-        KL = (log_probs_posterior - log_probs_prior).mean(dim=1)
-        KL = KL.sum() if reduce else KL
-        return KL
+        if prior_log_probs is None or posterior_log_probs is None:
+            return 0
+
+        kl = (posterior_log_probs - prior_log_probs).mean(dim=1)
+
+        return kl.sum() if reduce else kl
 
     @staticmethod
     def reduce_metrics(logging_outputs) -> None:
