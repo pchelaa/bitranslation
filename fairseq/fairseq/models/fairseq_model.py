@@ -91,6 +91,15 @@ class BaseFairseqModel(nn.Module):
             return self.decoder.get_posterior_log_probability(net_output)
         raise NotImplementedError
 
+    def get_kl_weight(
+        self,
+        net_output
+    ):
+        """Get kl weight from a net's output."""
+        if hasattr(self, "decoder"):
+            return self.decoder.get_kl_weight(net_output)
+        raise NotImplementedError
+
     def extract_features(self, *args, **kwargs):
         """Similar to *forward* but only return features."""
         return self(*args, **kwargs)
@@ -144,6 +153,12 @@ class BaseFairseqModel(nn.Module):
             if hasattr(m, 'set_num_updates') and m != self:
                 m.set_num_updates(num_updates)
         self.apply(_apply)
+
+        if hasattr(self, "encoder"):
+            return self.encoder.set_num_updates(num_updates)
+
+        if hasattr(self, "decoder"):
+            return self.decoder.set_num_updates(num_updates)
 
 
     def make_generation_fast_(self, **kwargs):

@@ -17,6 +17,7 @@ class FairseqDecoder(nn.Module):
         super().__init__()
         self.dictionary = dictionary
         self.onnx_trace = False
+        self.num_updates = 0
 
     def forward(self, prev_output_tokens, encoder_out=None, **kwargs):
         """
@@ -92,6 +93,13 @@ class FairseqDecoder(nn.Module):
         """Get posterior log probabilities from a net's output."""
         raise NotImplementedError
 
+    def get_kl_weight(
+        self,
+        net_output
+    ):
+        """Get kl weight from a net's output."""
+        raise NotImplementedError
+
     def max_positions(self):
         """Maximum input length supported by the decoder."""
         return 1e6  # an arbitrary large number
@@ -102,3 +110,7 @@ class FairseqDecoder(nn.Module):
 
     def prepare_for_onnx_export_(self):
         self.onnx_trace = True
+
+    def set_num_updates(self, num_updates):
+        """ State from trainer to pass along to model at every update """
+        self.num_updates = num_updates

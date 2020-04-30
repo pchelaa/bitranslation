@@ -260,6 +260,7 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
         Copied from the base class, but without ``**kwargs``,
         which are not supported by TorchScript.
         """
+
         encoder_out = self.encoder(
             src_tokens,
             src_lengths=src_lengths,
@@ -689,6 +690,14 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         return net_output[0][2]
 
+    def get_kl_weight(
+        self,
+        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+    ):
+        """Get kl weight from a net's output."""
+
+        return net_output[0][3]
+
     def forward(
         self,
         prev_output_tokens,
@@ -724,8 +733,14 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             alignment_heads=alignment_heads,
         )
         if not features_only:
-            return (self.output_layer(x[0]), x[1], x[2]), extra
+            return (self.output_layer(x[0]), x[1], x[2], x[3]), extra
         return x, extra
+
+    def reverse_tensor(self, tensor, dim):
+        inv_idx = torch.arange(tensor.shape[dim] - 1, -1, -1).long()
+        inv_tensor = tensor.index_select(dim, inv_idx)
+
+        return inv_tensor
 
     def extract_features(
         self,
@@ -791,40 +806,50 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
-        z, posterior_log_probs, prior_log_probs = None, None, None
+        kl_init_steps = 30000 #TODO: args.kl_init_steps
+        kl_warmup_steps = 10000 #TODO: args.kl_warmup_steps
 
-        src_sents = encoder_out.encoder_out.transpose(0, 1)
-        src_masks = (encoder_out.encoder_padding_mask == 0).float()
-        tgt_sents = prev_output_tokens
-        tgt_masks = (prev_output_tokens.eq(self.padding_idx) == 0).float()
+        z, posterior_log_probs, prior_log_probs, kl_weight = None, None, None, None
 
-        if self.training:
-            z, posterior_log_probs = self.posterior.sample(
-                tgt_sents,
-                tgt_masks,
-                src_sents,
-                src_masks,
-                nsamples=1
-            )
+        if self.num_updates > kl_init_steps:
+            src_sents = self.reverse_tensor(encoder_out.encoder_out.transpose(0, 1), dim=1)
+            src_masks = self.reverse_tensor((encoder_out.encoder_padding_mask == 0).float(), dim=1)
+            tgt_sents = self.reverse_tensor(prev_output_tokens, dim=1)
+            tgt_masks = self.reverse_tensor((prev_output_tokens.eq(self.padding_idx) == 0).float(), dim=1)
 
-            print(tgt_sents)
+            kl_weight = min(1.0, (self.num_updates + 1 - kl_init_steps) / float(kl_warmup_steps)) if kl_warmup_steps > 0 else 1.0
 
-            z = z.squeeze(1)
+            #print("SRC_SENTS_SHAPE", src_sents.shape)
+            #print("SRC_MASKS_SHAPE", src_masks.shape)
+            #print("TGT_SENTS_SHAPE", tgt_sents.shape)
+            #print("TGT_MASKS_SHAPE", tgt_masks.shape)
 
-            prior_log_probs = self.prior.log_probability(
-                z,
-                tgt_masks,
-                src_sents,
-                src_masks,
-            )
+            if self.training:
+                z, posterior_log_probs = self.posterior.sample(
+                    tgt_sents,
+                    tgt_masks,
+                    src_sents,
+                    src_masks,
+                    nsamples=1
+                )
 
+                #print("Z_SHAPE", z.shape)
 
-        else:
-            z, prior_log_probs = self.prior.sample(
-                src_sents,
-                src_masks,
-                nsamples=1
-            )
+                z = z.squeeze(1)
+
+                prior_log_probs = self.prior.log_probability(
+                    z,
+                    tgt_masks,
+                    src_sents,
+                    src_masks,
+                )
+
+            else:
+                z, prior_log_probs = self.prior.sample(
+                    src_sents,
+                    src_masks,
+                    nsamples=1
+                )
 
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.padding_idx).any():
@@ -857,9 +882,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 x, layer_attn, _ = layer(
                     x,
                     encoder_state,
-                    encoder_out.encoder_padding_mask
-                    if encoder_out is not None
-                    else None,
+                    encoder_out.encoder_padding_mask if encoder_out is not None else None,
                     incremental_state,
                     self_attn_mask=self_attn_mask,
                     self_attn_padding_mask=self_attn_padding_mask,
@@ -886,7 +909,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        return (x, prior_log_probs, posterior_log_probs), {"attn": [attn], "inner_states": inner_states}
+        return (x, prior_log_probs, posterior_log_probs, kl_weight), {"attn": [attn], "inner_states": inner_states}
 
     def output_layer(self, features):
         """Project features to the vocabulary size."""
@@ -916,6 +939,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             self._future_mask = torch.triu(
                 utils.fill_with_neg_inf(torch.zeros([dim, dim])), 1
             )
+
         self._future_mask = self._future_mask.to(tensor)
         return self._future_mask[:dim, :dim]
 

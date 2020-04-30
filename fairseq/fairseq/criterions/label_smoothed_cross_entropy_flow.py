@@ -53,6 +53,7 @@ class LabelSmoothedCrossEntropyCriterionWithKL(FairseqCriterion):
         lprobs = model.get_normalized_probs(net_output, log_probs=True)
         lprobs = lprobs.view(-1, lprobs.size(-1))
         target = model.get_targets(sample, net_output).view(-1, 1)
+
         loss, nll_loss = label_smoothed_nll_loss(
             lprobs, target, self.eps, ignore_index=self.padding_idx, reduce=reduce,
         )
@@ -61,11 +62,12 @@ class LabelSmoothedCrossEntropyCriterionWithKL(FairseqCriterion):
     def compute_kl_loss(self, model, net_output, reduce=True):
         prior_log_probs = model.get_prior_log_probability(net_output)
         posterior_log_probs = model.get_posterior_log_probability(net_output)
+        kl_weight = model.get_kl_weight(net_output)
 
-        if prior_log_probs is None or posterior_log_probs is None:
+        if prior_log_probs is None or posterior_log_probs is None or kl_weight is None:
             return None
 
-        kl = (posterior_log_probs - prior_log_probs).mean(dim=1)
+        kl = kl_weight * (posterior_log_probs - prior_log_probs).mean(dim=1)
 
         return kl.sum() if reduce else kl
 
@@ -73,11 +75,15 @@ class LabelSmoothedCrossEntropyCriterionWithKL(FairseqCriterion):
     def reduce_metrics(logging_outputs) -> None:
         """Aggregate logging outputs from data parallel training."""
         loss_sum = utils.item(sum(log.get('loss', 0) for log in logging_outputs))
+        kl_loss_sum = utils.item(sum(log.get('kl_loss', 0) for log in logging_outputs))
+        rec_loss_sum = utils.item(sum(log.get('rec_loss', 0) for log in logging_outputs))
         nll_loss_sum = utils.item(sum(log.get('nll_loss', 0) for log in logging_outputs))
         ntokens = utils.item(sum(log.get('ntokens', 0) for log in logging_outputs))
         sample_size = utils.item(sum(log.get('sample_size', 0) for log in logging_outputs))
 
         metrics.log_scalar('loss', loss_sum / sample_size / math.log(2), sample_size, round=3)
+        metrics.log_scalar('kl_loss', kl_loss_sum / sample_size / math.log(2), sample_size, round=3)
+        metrics.log_scalar('rec_loss', rec_loss_sum / sample_size / math.log(2), sample_size, round=3)
         metrics.log_scalar('nll_loss', nll_loss_sum / ntokens / math.log(2), ntokens, round=3)
         metrics.log_derived('ppl', lambda meters: utils.get_perplexity(meters['nll_loss'].avg))
 
