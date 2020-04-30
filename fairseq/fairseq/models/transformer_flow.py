@@ -793,28 +793,36 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         z, posterior_log_probs, prior_log_probs = None, None, None
 
+        src_sents = encoder_out.encoder_out.transpose(0, 1)
+        src_masks = (encoder_out.encoder_padding_mask == 0).float()
+        tgt_sents = prev_output_tokens
+        tgt_masks = (prev_output_tokens.eq(self.padding_idx) == 0).float()
+
         if self.training:
             z, posterior_log_probs = self.posterior.sample(
-                prev_output_tokens,
-                prev_output_tokens.eq(self.padding_idx),
-                encoder_out.encoder_out.transpose(0, 1),
-                encoder_out.encoder_padding_mask,
+                tgt_sents,
+                tgt_masks,
+                src_sents,
+                src_masks,
                 nsamples=1
             )
+
+            print(tgt_sents)
 
             z = z.squeeze(1)
 
             prior_log_probs = self.prior.log_probability(
                 z,
-                torch.ones_like(prev_output_tokens),
-                encoder_out.encoder_out.transpose(0, 1),
-                encoder_out.encoder_padding_mask,
+                tgt_masks,
+                src_sents,
+                src_masks,
             )
+
 
         else:
             z, prior_log_probs = self.prior.sample(
-                encoder_out.encoder_out.transpose(0, 1),
-                encoder_out.encoder_padding_mask,
+                src_sents,
+                src_masks,
                 nsamples=1
             )
 

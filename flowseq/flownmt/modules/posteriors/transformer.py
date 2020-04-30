@@ -43,6 +43,7 @@ class TransformerCore(nn.Module):
         for layer in self.layers:
             x = layer(x, mask, src_enc, key_mask)
 
+
         mu = self.mu(x) * tgt_masks.unsqueeze(2)
         logvar = self.logvar(x) * tgt_masks.unsqueeze(2)
         return mu, logvar

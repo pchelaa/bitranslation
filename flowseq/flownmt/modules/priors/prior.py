@@ -186,6 +186,7 @@ class Prior(nn.Module):
                 compute loss of length
 
         Returns: Tensor1, Tensor2
+        Returns: Tensor1, Tensor2
             Tensor1: log probabilities of z [batch]
             Tensor2: length loss [batch]
 
