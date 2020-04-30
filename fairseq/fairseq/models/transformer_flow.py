@@ -632,13 +632,13 @@ class TransformerDecoder(FairseqIncrementalDecoder):
     @classmethod
     def build_posterior(self, args, dictionary):
         posterior_params = {
-            "type": "rnn",
-            "rnn_mode": "LSTM",
-            "num_layers": 2,
-            "use_attn": True,
-            "dropout": 0.33,
+            "type": "transformer",
+            "num_layers": 4,
+            "heads": 8,
+            "max_length": 250,
+            "dropout": 0.1,
             "dropword": 0.2
-        }
+          }
 
         posterior_params['vocab_size'] = len(dictionary)
         posterior_params['padding_idx'] = dictionary.pad()
@@ -794,21 +794,23 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         z, posterior_log_probs, prior_log_probs = None, None, None
 
         if self.training:
-            if (self.padding_idx > 1):
-                z, posterior_log_probs = self.posterior.sample(
-                    prev_output_tokens,
-                    prev_output_tokens.eq(self.padding_idx),
-                    encoder_out.encoder_out.transpose(0, 1),
-                    encoder_out.encoder_padding_mask,
-                    nsamples=1
-                )
+            z, posterior_log_probs = self.posterior.sample(
+                prev_output_tokens,
+                prev_output_tokens.eq(self.padding_idx),
+                encoder_out.encoder_out.transpose(0, 1),
+                encoder_out.encoder_padding_mask,
+                nsamples=1
+            )
 
-                prior_log_probs = self.prior.log_probability(
-                    z,
-                    encoder_out.encoder_out.transpose(0, 1).new_ones(encoder_out.encoder_out.transpose(0, 1).size(), 1),
-                    encoder_out.encoder_out.transpose(0, 1),
-                    encoder_out.encoder_padding_mask
-                )
+            z = z.squeeze(1)
+
+            prior_log_probs = self.prior.log_probability(
+                z,
+                torch.ones_like(prev_output_tokens),
+                encoder_out.encoder_out.transpose(0, 1),
+                encoder_out.encoder_padding_mask,
+            )
+
         else:
             z, prior_log_probs = self.prior.sample(
                 encoder_out.encoder_out.transpose(0, 1),

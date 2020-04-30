@@ -34,22 +34,20 @@ class LabelSmoothedCrossEntropyCriterionWithKL(FairseqCriterion):
         3) logging outputs to display while training
         """
         net_output = model(**sample['net_input'])
-        loss, nll_loss = self.compute_loss(model, net_output, sample, reduce=reduce)
+        rec_loss, nll_loss = self.compute_rec_loss(model, net_output, sample, reduce)
+        kl_loss = self.compute_kl_loss(model, net_output, reduce)
+        loss = rec_loss + (kl_loss if kl_loss is not None else 0)
         sample_size = sample['target'].size(0) if self.args.sentence_avg else sample['ntokens']
         logging_output = {
             'loss': loss.data,
+            'rec_loss': rec_loss.data,
+            'kl_loss': kl_loss.data if kl_loss is not None else 0,
             'nll_loss': nll_loss.data,
             'ntokens': sample['ntokens'],
             'nsentences': sample['target'].size(0),
             'sample_size': sample_size,
         }
         return loss, sample_size, logging_output
-
-    def compute_loss(self, model, net_output, sample, reduce=True):
-        rec_loss, nll_loss = self.compute_rec_loss(model, net_output, sample, reduce)
-        kl_loss = self.compute_kl_loss(model, net_output, reduce)
-
-        return rec_loss + kl_loss, nll_loss
 
     def compute_rec_loss(self, model, net_output, sample, reduce=True):
         lprobs = model.get_normalized_probs(net_output, log_probs=True)
@@ -65,7 +63,7 @@ class LabelSmoothedCrossEntropyCriterionWithKL(FairseqCriterion):
         posterior_log_probs = model.get_posterior_log_probability(net_output)
 
         if prior_log_probs is None or posterior_log_probs is None:
-            return 0
+            return None
 
         kl = (posterior_log_probs - prior_log_probs).mean(dim=1)
 

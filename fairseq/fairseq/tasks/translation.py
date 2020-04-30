@@ -22,6 +22,7 @@ from fairseq.data import (
     PrependTokenDataset,
     StripTokenDataset,
     TruncateDataset,
+    EvenDataset,
 )
 
 from fairseq.tasks import FairseqTask, register_task
@@ -64,6 +65,7 @@ def load_langpair_dataset(
                 raise FileNotFoundError('Dataset not found: {} ({})'.format(split, data_path))
 
         src_dataset = data_utils.load_indexed_dataset(prefix + src, src_dict, dataset_impl)
+        src_dataset = EvenDataset(src_dataset, src_dict.eos())
         if truncate_source:
             src_dataset = AppendTokenDataset(
                 TruncateDataset(
@@ -76,6 +78,7 @@ def load_langpair_dataset(
 
         tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, tgt_dict, dataset_impl)
         if tgt_dataset is not None:
+            tgt_dataset = EvenDataset(tgt_dataset, tgt_dict.eos())
             tgt_datasets.append(tgt_dataset)
 
         logger.info('{} {} {}-{} {} examples'.format(
@@ -117,6 +120,9 @@ def load_langpair_dataset(
         align_path = os.path.join(data_path, '{}.align.{}-{}'.format(split, src, tgt))
         if indexed_dataset.dataset_exists(align_path, impl=dataset_impl):
             align_dataset = data_utils.load_indexed_dataset(align_path, None, dataset_impl)
+
+    src_dataset = EvenDataset(src_dataset, src_dict.eos())
+    tgt_dataset = EvenDataset(tgt_dataset, tgt_dict.eos())
 
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
     return LanguagePairDataset(
