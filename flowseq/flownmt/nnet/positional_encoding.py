@@ -46,7 +46,7 @@ class PositionalEncoding(nn.Module):
             # recompute/expand embeddings if needed
             self.weights = PositionalEncoding.get_embedding(
                 max_pos,
-                self.embedding_dim,
+                self.encoding_dim,
                 self.padding_idx,
             )
         self.weights = self.weights.type_as(self._float_tensor)
