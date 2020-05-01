@@ -683,7 +683,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
     ):
         """Get logits from a net's output."""
-        raise net_output[0][0]
+        return net_output[0][0]
 
     def get_prior_log_probability(
         self,
