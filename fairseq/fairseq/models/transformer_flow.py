@@ -640,7 +640,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             "type": "transformer",
             "num_layers": 4,
             "heads": 8,
-            "max_length": 250,
+            "max_length": args.max_target_positions,
             "dropout": 0.1,
             "dropword": 0.2
           }
@@ -678,13 +678,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         else:
             return utils.softmax(logits, dim=-1, onnx_trace=self.onnx_trace)
 
-    def get_logits(
-        self,
-        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
-    ):
-        """Get logits from a net's output."""
-        return net_output[0][0]
-
     def get_prior_log_probability(
         self,
         net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
@@ -700,14 +693,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         """Get posterior log probabilities from a net's output."""
 
         return net_output[0][2]
-
-    def set_logits(
-        self,
-        net_output,
-        logits
-    ):
-        """Set logits to a net's output."""
-        net_output[0][0] = logits
 
     def forward(
         self,
