@@ -163,6 +163,8 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
                             help='add layernorm to embedding')
         parser.add_argument('--no-scale-embedding', action='store_true',
                             help='if True, dont scale embeddings')
+        parser.add_argument('--kl-init-steps', default=30000, type=int, metavar='N',
+                            help='number of iterations before calculating kl')
         # fmt: on
 
     @classmethod
@@ -530,6 +532,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         self.padding_idx = embed_tokens.padding_idx
         self.max_target_positions = args.max_target_positions
 
+        self.kl_init_steps = args.kl_init_steps
+
         self.embed_tokens = embed_tokens
 
         self.embed_scale = 1.0 if args.no_scale_embedding else math.sqrt(embed_dim)
@@ -690,14 +694,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         return net_output[0][2]
 
-    def get_kl_weight(
-        self,
-        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
-    ):
-        """Get kl weight from a net's output."""
-
-        return net_output[0][3]
-
     def forward(
         self,
         prev_output_tokens,
@@ -733,7 +729,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             alignment_heads=alignment_heads,
         )
         if not features_only:
-            return (self.output_layer(x[0]), x[1], x[2], x[3]), extra
+            return (self.output_layer(x[0]), x[1], x[2]), extra
         return x, extra
 
     def reverse_tensor(self, tensor, dim):
@@ -806,18 +802,13 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
-        kl_init_steps = 30000 #TODO: args.kl_init_steps
-        kl_warmup_steps = 10000 #TODO: args.kl_warmup_steps
+        z, posterior_log_probs, prior_log_probs = None, None, None
 
-        z, posterior_log_probs, prior_log_probs, kl_weight = None, None, None, None
-
-        if self.num_updates > kl_init_steps:
+        if self.num_updates > self.kl_init_steps:
             src_sents = self.reverse_tensor(encoder_out.encoder_out.transpose(0, 1), dim=1)
             src_masks = self.reverse_tensor((encoder_out.encoder_padding_mask == 0).float(), dim=1)
             tgt_sents = self.reverse_tensor(prev_output_tokens, dim=1)
             tgt_masks = self.reverse_tensor((prev_output_tokens.eq(self.padding_idx) == 0).float(), dim=1)
-
-            kl_weight = min(1.0, (self.num_updates + 1 - kl_init_steps) / float(kl_warmup_steps)) if kl_warmup_steps > 0 else 1.0
 
             #print("SRC_SENTS_SHAPE", src_sents.shape)
             #print("SRC_MASKS_SHAPE", src_masks.shape)
@@ -909,7 +900,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        return (x, prior_log_probs, posterior_log_probs, kl_weight), {"attn": [attn], "inner_states": inner_states}
+        return (x, prior_log_probs, posterior_log_probs), {"attn": [attn], "inner_states": inner_states}
 
     def output_layer(self, features):
         """Project features to the vocabulary size."""

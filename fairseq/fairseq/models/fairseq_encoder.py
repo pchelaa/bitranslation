@@ -24,7 +24,6 @@ class FairseqEncoder(nn.Module):
     def __init__(self, dictionary):
         super().__init__()
         self.dictionary = dictionary
-        self.num_updates = 0
 
     def forward(self, src_tokens, src_lengths=None, **kwargs):
         """
@@ -56,7 +55,3 @@ class FairseqEncoder(nn.Module):
     def upgrade_state_dict(self, state_dict):
         """Upgrade a (possibly old) state dict for new versions of fairseq."""
         return state_dict
-
-    def set_num_updates(self, num_updates):
-        """ State from trainer to pass along to model at every update """
-        self.num_updates = num_updates

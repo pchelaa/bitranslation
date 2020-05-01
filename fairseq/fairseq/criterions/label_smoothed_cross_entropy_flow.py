@@ -16,6 +16,8 @@ class LabelSmoothedCrossEntropyCriterionWithKL(FairseqCriterion):
     def __init__(self, args, task):
         super().__init__(args, task)
         self.eps = args.label_smoothing
+        self.kl_init_steps = args.kl_init_steps
+        self.kl_warmup_steps = args.kl_warmup_steps
 
     @staticmethod
     def add_args(parser):
@@ -23,6 +25,8 @@ class LabelSmoothedCrossEntropyCriterionWithKL(FairseqCriterion):
         # fmt: off
         parser.add_argument('--label-smoothing', default=0., type=float, metavar='D',
                             help='epsilon for label smoothing, 0 means no label smoothing')
+        parser.add_argument('--kl-warmup-steps', default=10000, type=int, metavar='N',
+                            help='number of iterations of kl warmup')
         # fmt: on
 
     def forward(self, model, sample, reduce=True):
@@ -62,11 +66,11 @@ class LabelSmoothedCrossEntropyCriterionWithKL(FairseqCriterion):
     def compute_kl_loss(self, model, net_output, reduce=True):
         prior_log_probs = model.get_prior_log_probability(net_output)
         posterior_log_probs = model.get_posterior_log_probability(net_output)
-        kl_weight = model.get_kl_weight(net_output)
 
-        if prior_log_probs is None or posterior_log_probs is None or kl_weight is None:
+        if prior_log_probs is None or posterior_log_probs is None:
             return None
 
+        kl_weight = min(1.0, (model.num_updates + 1 - self.kl_init_steps) / float(self.kl_warmup_steps)) if self.kl_warmup_steps > 0 else 1.0
         kl = kl_weight * (posterior_log_probs - prior_log_probs).mean(dim=1)
 
         return kl.sum() if reduce else kl

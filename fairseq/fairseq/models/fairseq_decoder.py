@@ -17,7 +17,6 @@ class FairseqDecoder(nn.Module):
         super().__init__()
         self.dictionary = dictionary
         self.onnx_trace = False
-        self.num_updates = 0
 
     def forward(self, prev_output_tokens, encoder_out=None, **kwargs):
         """
@@ -91,13 +90,6 @@ class FairseqDecoder(nn.Module):
         net_output
     ):
         """Get posterior log probabilities from a net's output."""
-        raise NotImplementedError
-
-    def get_kl_weight(
-        self,
-        net_output
-    ):
-        """Get kl weight from a net's output."""
         raise NotImplementedError
 
     def max_positions(self):
