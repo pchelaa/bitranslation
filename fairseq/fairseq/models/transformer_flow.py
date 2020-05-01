@@ -783,8 +783,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             if positions is not None:
                 positions = positions[:, -1:]
 
-
-        # z should be somewhere here
         # embed tokens and positions
         x = self.embed_scale * self.embed_tokens(prev_output_tokens)
 
@@ -804,43 +802,62 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         z, posterior_log_probs, prior_log_probs = None, None, None
 
-        if self.num_updates > self.kl_init_steps:
-            src_sents = self.reverse_tensor(encoder_out.encoder_out.transpose(0, 1), dim=1)
+        if self.training:
+            src_encoded = self.reverse_tensor(encoder_out.encoder_out.transpose(0, 1), dim=1)
             src_masks = self.reverse_tensor((encoder_out.encoder_padding_mask == 0).float(), dim=1)
             tgt_sents = self.reverse_tensor(prev_output_tokens, dim=1)
             tgt_masks = self.reverse_tensor((prev_output_tokens.eq(self.padding_idx) == 0).float(), dim=1)
+
+            # Probably should be here
+            # if self.num_updates == 0:
+            #     z, _ = self.posterior.init(tgt_sents, tgt_masks, src_encoded, src_masks,
+            #                                init_scale=1.0, init_mu=True, init_var=False)
 
             #print("SRC_SENTS_SHAPE", src_sents.shape)
             #print("SRC_MASKS_SHAPE", src_masks.shape)
             #print("TGT_SENTS_SHAPE", tgt_sents.shape)
             #print("TGT_MASKS_SHAPE", tgt_masks.shape)
 
-            if self.training:
-                z, posterior_log_probs = self.posterior.sample(
-                    tgt_sents,
-                    tgt_masks,
-                    src_sents,
-                    src_masks,
-                    nsamples=1
-                )
+            z, posterior_log_probs = self.posterior.sample(
+                tgt_sents,
+                tgt_masks,
+                src_encoded,
+                src_masks,
+                nsamples=1,
+#                 random=False
+            )
 
-                #print("Z_SHAPE", z.shape)
+            z = z.squeeze(1)
 
-                z = z.squeeze(1)
+            if self.num_updates > self.kl_init_steps:
+
+                # Probably should be here
+                # if self.num_updates == self.kl_init_steps:
+                #     z_, _ = self.posterior.init(tgt_sents, tgt_masks, src_encoded, src_masks,
+                #                                 init_scale=1.0, init_mu=False, init_var=True)
+                #     self.prior.init(z_.squeeze(1), tgt_masks, src_encoded, src_masks, init_scale=1.0)
 
                 prior_log_probs = self.prior.log_probability(
                     z,
                     tgt_masks,
-                    src_sents,
+                    src_encoded,
                     src_masks,
                 )
 
-            else:
-                z, prior_log_probs = self.prior.sample(
-                    src_sents,
-                    src_masks,
-                    nsamples=1
-                )
+#                 probablitiy clipping for dummies
+#                 posterior_log_probs = torch.clamp(posterior_log_probs, min=-1000)
+#                 prior_log_probs = torch.clamp(prior_log_probs, min=1.1*torch.min(posterior_log_probs).data)
+#                 print(posterior_log_probs)
+#                 print(prior_log_probs)
+
+        else:
+            z, prior_log_probs = self.prior.sample(
+                src_encoded,
+                src_masks,
+                nsamples=1
+            )
+
+        x += z.transpose(0, 1)
 
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.padding_idx).any():
