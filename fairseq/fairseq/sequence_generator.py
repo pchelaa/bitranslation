@@ -272,9 +272,11 @@ class SequenceGenerator(object):
                 model.reorder_incremental_state(reorder_state)
                 encoder_outs = model.reorder_encoder_out(encoder_outs, reorder_state)
 
-            lprobs, avg_attn_scores = model.forward_decoder(
+            decoder_output = model.forward_decoder(
                 tokens[:, :step + 1], encoder_outs, temperature=self.temperature,
             )
+
+            lprobs = model.get_logits(decoder_output)
             lprobs[lprobs != lprobs] = -math.inf
 
             lprobs[:, self.pad] = -math.inf  # never select pad
@@ -327,6 +329,7 @@ class SequenceGenerator(object):
                                 gen_ngrams[bbsz_idx].get(tuple(ngram[:-1]), []) + [ngram[-1]]
 
             # Record attention scores
+            avg_attn_scores = model.get_avg_attn_scores(decoder_output)
             if type(avg_attn_scores) is list:
                 avg_attn_scores = avg_attn_scores[0]
             if avg_attn_scores is not None:
@@ -569,10 +572,14 @@ class EnsembleModel(torch.nn.Module):
             ))
         else:
             decoder_out = list(model.forward_decoder(tokens, encoder_out=encoder_out))
-        decoder_out[0] = decoder_out[0][:, -1:, :]
+
+        logits = model.get_logits(decoder_out)
+        logits = logits[:, -1:, :]
         if temperature != 1.:
-            decoder_out[0].div_(temperature)
-        attn = decoder_out[1]
+            logits.div_(temperature)
+        model.set_logits(decoder_out, logits)
+
+        attn = model.get_avg_attn_scores(decoder_out)
         if type(attn) is dict:
             attn = attn.get('attn', None)
         if type(attn) is list:
@@ -686,10 +693,14 @@ class EnsembleModelWithAlignment(EnsembleModel):
             ))
         else:
             decoder_out = list(model.forward_decoder(tokens, encoder_out=encoder_out))
-        decoder_out[0] = decoder_out[0][:, -1:, :]
+
+        logits = model.get_logits(decoder_out)
+        logits = logits[:, -1:, :]
         if temperature != 1.:
-            decoder_out[0].div_(temperature)
-        attn = decoder_out[1]
+            logits.div_(temperature)
+        model.set_logits(decoder_out, logits)
+
+        attn = model.get_avg_attn_scores(decoder_out)
         if type(attn) is dict:
             attn = attn.get('attn', None)
         if type(attn) is list:

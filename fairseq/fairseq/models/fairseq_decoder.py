@@ -78,6 +78,20 @@ class FairseqDecoder(nn.Module):
         else:
             return utils.softmax(logits, dim=-1, onnx_trace=self.onnx_trace)
 
+    def get_logits(
+        self,
+        net_output
+    ):
+        """Get logits from a net's output."""
+        return net_output[0]
+
+    def get_avg_attn_scores(
+        self,
+        net_output
+    ):
+        """Get average attn scores from a net's output."""
+        return net_output[1]
+
     def get_prior_log_probability(
         self,
         net_output
@@ -91,6 +105,14 @@ class FairseqDecoder(nn.Module):
     ):
         """Get posterior log probabilities from a net's output."""
         raise NotImplementedError
+
+    def set_logits(
+        self,
+        net_output,
+        logits
+    ):
+        """Set logits to a net's output."""
+        net_output[0] = logits
 
     def max_positions(self):
         """Maximum input length supported by the decoder."""

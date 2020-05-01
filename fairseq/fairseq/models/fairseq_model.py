@@ -74,6 +74,24 @@ class BaseFairseqModel(nn.Module):
                 return F.softmax(logits, dim=-1)
         raise NotImplementedError
 
+    def get_logits(
+        self,
+        net_output
+    ):
+        """Get logits from a net's output."""
+        if hasattr(self, "decoder"):
+            return self.decoder.get_logits(net_output)
+        raise NotImplementedError
+
+    def get_avg_attn_scores(
+        self,
+        net_output
+    ):
+        """Get prior average attn scores from a net's output."""
+        if hasattr(self, "decoder"):
+            return self.decoder.get_avg_attn_scores(net_output)
+        raise NotImplementedError
+
     def get_prior_log_probability(
         self,
         net_output
@@ -91,6 +109,15 @@ class BaseFairseqModel(nn.Module):
         if hasattr(self, "decoder"):
             return self.decoder.get_posterior_log_probability(net_output)
         raise NotImplementedError
+
+    def set_logits(
+        self,
+        net_output,
+        logits
+    ):
+        """Set logits to a net's output."""
+        if hasattr(self, "decoder"):
+            self.decoder.set_logits(net_output, logits)
 
     def extract_features(self, *args, **kwargs):
         """Similar to *forward* but only return features."""
