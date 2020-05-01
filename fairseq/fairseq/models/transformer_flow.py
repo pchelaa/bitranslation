@@ -748,7 +748,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         return x, extra
 
     def reverse_tensor(self, tensor, dim):
-        inv_idx = torch.arange(tensor.shape[dim] - 1, -1, -1).long()
+        inv_idx = torch.arange(tensor.shape[dim] - 1, -1, -1, device=tensor.device).long()
         inv_tensor = tensor.index_select(dim, inv_idx)
 
         return inv_tensor
