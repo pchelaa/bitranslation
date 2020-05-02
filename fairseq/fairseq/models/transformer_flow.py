@@ -607,24 +607,25 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         prior_params = {
             "type": "normal",
             "length_predictor": {
-                "type": "diff_softmax",
-                "diff_range": 16,
-                "dropout": 0.33,
-                "label_smoothing": 0.1
+              "type": "diff_softmax",
+              "diff_range": 16,
+              "dropout": 0.33,
+              "label_smoothing": 0.1
             },
             "flow": {
-                "levels": 3,
-                "num_steps": [4, 2, 2],
-                "factors": [2, 2],
-                "hidden_features": args.decoder_embed_dim,
-                # "hidden_features": 256,
-                "transform": "affine",
-                "coupling_type": "rnn",
-                "rnn_mode": "LSTM",
-                "dropout": 0.0,
-                "inverse": True
+              "levels": 3,
+              "num_steps": [4, 4, 2],
+              "factors": [2, 2],
+              "hidden_features": args.decoder_embed_dim,
+              "transform": "affine",
+              "coupling_type": "self_attn",
+              "heads": 4,
+              "pos_enc": "attn",
+              "max_length": args.max_target_positions,
+              "dropout": 0.0,
+              "inverse": True
             }
-        }
+          }
         max_src_length = args.max_source_positions
         latent_dim = args.decoder_embed_dim
         prior_params['flow']['features'] = latent_dim
@@ -639,7 +640,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         posterior_params = {
             "type": "transformer",
             "num_layers": 4,
-            "heads": 8,
+            "heads": 4,
             "max_length": args.max_target_positions,
             "dropout": 0.1,
             "dropword": 0.2
