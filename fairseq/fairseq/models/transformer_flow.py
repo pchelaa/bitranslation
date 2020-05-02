@@ -870,11 +870,12 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 # print(prior_log_probs)
 
         else:
-            z, prior_log_probs = self.prior.sample(
-                src_encoded,
-                src_masks,
-                nsamples=1
-            )
+            if self.num_updates > self.kl_init_steps:
+                z, prior_log_probs = self.prior.sample(
+                    src_encoded,
+                    src_masks,
+                    nsamples=1
+                )
 
         x += z.transpose(0, 1)
 
