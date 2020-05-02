@@ -679,6 +679,14 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         else:
             return utils.softmax(logits, dim=-1, onnx_trace=self.onnx_trace)
 
+    def get_logits(
+        self,
+        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+    ):
+        """Get prior log probabilities from a net's output."""
+
+        return net_output[0][0]
+
     def get_prior_log_probability(
         self,
         net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
@@ -694,6 +702,15 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         """Get posterior log probabilities from a net's output."""
 
         return net_output[0][2]
+
+    def set_logits(self,
+        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+        logits
+    ):
+        """Get prior log probabilities from a net's output."""
+
+        return ((logits, net_output[0][1], net_output[0][2]), net_output[1])
+
 
     def forward(
         self,
@@ -814,18 +831,13 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             #     z, _ = self.posterior.init(tgt_sents, tgt_masks, src_encoded, src_masks,
             #                                init_scale=1.0, init_mu=True, init_var=False)
 
-            #print("SRC_SENTS_SHAPE", src_sents.shape)
-            #print("SRC_MASKS_SHAPE", src_masks.shape)
-            #print("TGT_SENTS_SHAPE", tgt_sents.shape)
-            #print("TGT_MASKS_SHAPE", tgt_masks.shape)
-
             z, posterior_log_probs = self.posterior.sample(
                 tgt_sents,
                 tgt_masks,
                 src_encoded,
                 src_masks,
                 nsamples=1,
-#                 random=False
+                # random=False
             )
 
             z = z.squeeze(1)
@@ -845,11 +857,11 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                     src_masks,
                 )
 
-#                 probablitiy clipping for dummies
-#                 posterior_log_probs = torch.clamp(posterior_log_probs, min=-1000)
-#                 prior_log_probs = torch.clamp(prior_log_probs, min=1.1*torch.min(posterior_log_probs).data)
-#                 print(posterior_log_probs)
-#                 print(prior_log_probs)
+                # probablitiy clipping for dummies
+                # posterior_log_probs = torch.clamp(posterior_log_probs, min=-1000)
+                # prior_log_probs = torch.clamp(prior_log_probs, min=1.1*torch.min(posterior_log_probs).data)
+                # print(posterior_log_probs)
+                # print(prior_log_probs)
 
         else:
             z, prior_log_probs = self.prior.sample(
