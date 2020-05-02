@@ -15,7 +15,9 @@ class Posterior(nn.Module):
         if _shared_embed is None:
             self.tgt_embed = nn.Embedding(vocab_size, embed_dim, padding_idx=padding_idx)
             self.reset_parameters()
+            print("don't share embed in posterior")
         else:
+            print("shared with decoder")
             self.tgt_embed = _shared_embed
 
     def reset_parameters(self):

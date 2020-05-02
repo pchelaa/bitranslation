@@ -136,6 +136,8 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
         parser.add_argument('--share-all-embeddings', action='store_true',
                             help='share encoder, decoder and output embeddings'
                                  ' (requires shared dictionary and embed dim)')
+        parser.add_argument('--share-decoder-posterior-embeddings', default=False, action='store_true',
+                            help='share posterior and decoder embeddings')
         parser.add_argument('--no-token-positional-embeddings', default=False, action='store_true',
                             help='if set, disables positional embeddings (outside self attention)')
         parser.add_argument('--adaptive-softmax-cutoff', metavar='EXPR',
@@ -517,8 +519,11 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         self.register_buffer("version", torch.Tensor([3]))
         self._future_mask = torch.empty(0)
 
+        self.embed_tokens = embed_tokens
+
         self.prior = self.build_prior(args)
-        self.posterior = self.build_posterior(args, dictionary)
+        _shared_embed = embed_tokens if args.share_decoder_posterior_embeddings else None
+        self.posterior = self.build_posterior(args, dictionary, _shared_embed)
 
         self.dropout = args.dropout
         self.decoder_layerdrop = args.decoder_layerdrop
@@ -533,8 +538,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         self.max_target_positions = args.max_target_positions
 
         self.kl_init_steps = args.kl_init_steps
-
-        self.embed_tokens = embed_tokens
 
         self.embed_scale = 1.0 if args.no_scale_embedding else math.sqrt(embed_dim)
 
@@ -636,7 +639,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         return Prior.by_name(prior_params.pop('type')).from_params(prior_params)
 
     @classmethod
-    def build_posterior(self, args, dictionary):
+    def build_posterior(self, args, dictionary, _shared_embed=None):
         posterior_params = {
             "type": "transformer",
             "num_layers": 4,
@@ -651,6 +654,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         posterior_params['embed_dim'] = args.decoder_embed_dim
         posterior_params['latent_dim'] = args.decoder_embed_dim
         posterior_params['hidden_size'] = args.decoder_embed_dim
+        if _shared_embed is not None:
+            posterior_params['_shared_embed'] = _shared_embed
 
         return Posterior.by_name(posterior_params.pop('type')).from_params(posterior_params)
 
