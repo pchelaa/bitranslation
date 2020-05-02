@@ -820,9 +820,10 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         z, posterior_log_probs, prior_log_probs = None, None, None
 
+        src_encoded = self.reverse_tensor(encoder_out.encoder_out.transpose(0, 1), dim=1)
+        src_masks = self.reverse_tensor((encoder_out.encoder_padding_mask == 0).float(), dim=1)
+
         if self.training:
-            src_encoded = self.reverse_tensor(encoder_out.encoder_out.transpose(0, 1), dim=1)
-            src_masks = self.reverse_tensor((encoder_out.encoder_padding_mask == 0).float(), dim=1)
             tgt_sents = self.reverse_tensor(prev_output_tokens, dim=1)
             tgt_masks = self.reverse_tensor((prev_output_tokens.eq(self.padding_idx) == 0).float(), dim=1)
 
