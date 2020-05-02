@@ -83,6 +83,8 @@ class FairseqDecoder(nn.Module):
         net_output
     ):
         """Get logits from a net's output."""
+        if net_output is None:
+            return None
         return net_output[0]
 
     def get_avg_attn_scores(
@@ -90,6 +92,8 @@ class FairseqDecoder(nn.Module):
         net_output
     ):
         """Get average attn scores from a net's output."""
+        if net_output is None:
+            return None
         return net_output[1]
 
     def get_prior_log_probability(
