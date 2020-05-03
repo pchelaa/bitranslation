@@ -577,7 +577,7 @@ class EnsembleModel(torch.nn.Module):
         logits = logits[:, -1:, :]
         if temperature != 1.:
             logits.div_(temperature)
-        decoder_out = model.set_logits(decoder_out, logits)
+        decoder_out = model.update_logits(decoder_out, logits)
 
         attn = model.get_avg_attn_scores(decoder_out)
         if type(attn) is dict:
@@ -698,7 +698,7 @@ class EnsembleModelWithAlignment(EnsembleModel):
         logits = logits[:, -1:, :]
         if temperature != 1.:
             logits.div_(temperature)
-        decoder_out = model.set_logits(decoder_out, logits)
+        decoder_out = model.update_logits(decoder_out, logits)
 
         attn = model.get_avg_attn_scores(decoder_out)
         if type(attn) is dict:

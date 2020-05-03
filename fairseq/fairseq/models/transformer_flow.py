@@ -680,7 +680,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         if net_output is None or net_output[0] is None:
             return None
-        
+
         logits = net_output[0][0]
         if log_probs:
             return utils.log_softmax(logits, dim=-1, onnx_trace=self.onnx_trace)
@@ -711,7 +711,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         return net_output[0][2]
 
-    def set_logits(self,
+    def update_logits(self,
         net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
         logits
     ):

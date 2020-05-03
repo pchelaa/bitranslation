@@ -110,14 +110,14 @@ class BaseFairseqModel(nn.Module):
             return self.decoder.get_posterior_log_probability(net_output)
         raise NotImplementedError
 
-    def set_logits(
+    def update_logits(
         self,
         net_output,
         logits
     ):
         """Set logits to a net's output."""
         if hasattr(self, "decoder"):
-            self.decoder.set_logits(net_output, logits)
+            self.decoder.update_logits(net_output, logits)
 
     def extract_features(self, *args, **kwargs):
         """Similar to *forward* but only return features."""

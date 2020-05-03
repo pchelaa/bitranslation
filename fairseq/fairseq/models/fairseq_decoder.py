@@ -110,13 +110,13 @@ class FairseqDecoder(nn.Module):
         """Get posterior log probabilities from a net's output."""
         raise NotImplementedError
 
-    def set_logits(
+    def update_logits(
         self,
         net_output,
         logits
     ):
         """Set logits to a net's output."""
-        net_output[0] = logits
+        return (logits, net_output[1])
 
     def max_positions(self):
         """Maximum input length supported by the decoder."""
