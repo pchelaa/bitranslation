@@ -613,6 +613,15 @@ class EnsembleModel(torch.nn.Module):
             return None
         return net_output[0]
 
+    def get_avg_attn_scores(
+        self,
+        net_output
+    ):
+        """Get average attn scores from a net's output."""
+        if net_output is None:
+            return None
+        return net_output[1]
+
     def update_logits(
         self,
         net_output,
