@@ -117,7 +117,8 @@ class BaseFairseqModel(nn.Module):
     ):
         """Set logits to a net's output."""
         if hasattr(self, "decoder"):
-            self.decoder.update_logits(net_output, logits)
+            return self.decoder.update_logits(net_output, logits)
+        raise NotImplementedError
 
     def extract_features(self, *args, **kwargs):
         """Similar to *forward* but only return features."""
