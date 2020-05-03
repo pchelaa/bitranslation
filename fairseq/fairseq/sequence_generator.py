@@ -604,6 +604,23 @@ class EnsembleModel(torch.nn.Module):
         for model in self.models:
             model.decoder.reorder_incremental_state(self.incremental_states[model], new_order)
 
+    def get_logits(
+        self,
+        net_output
+    ):
+        """Get logits from a net's output."""
+        if net_output is None:
+            return None
+        return net_output[0]
+
+    def update_logits(
+        self,
+        net_output,
+        logits
+    ):
+        """Set logits to a net's output."""
+        return (logits, net_output[1])
+
 
 class SequenceGeneratorWithAlignment(SequenceGenerator):
 
