@@ -842,8 +842,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 tgt_masks,
                 src_encoded,
                 src_masks,
-                nsamples=1,
-                # random=False
+                nsamples=1
             )
 
             z = z.squeeze(1)
@@ -874,6 +873,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 z, prior_log_probs = self.prior.sample(
                     src_encoded,
                     src_masks,
+                    length=x.shape[0],
                     nsamples=1
                 )
 

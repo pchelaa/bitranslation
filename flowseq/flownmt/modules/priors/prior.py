@@ -87,8 +87,11 @@ class Prior(nn.Module):
         return z, log_probs
 
     def sample(self, src: torch.Tensor,
-               src_mask: torch.Tensor,  nsamples = 1,
-               tau=0.0, include_zero=False) -> Tuple[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
+               src_mask: torch.Tensor,
+               length = 1,
+               nsamples = 1,
+               tau=0.0,
+               include_zero=False) -> Tuple[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
         """
 
         Args:
@@ -118,7 +121,7 @@ class Prior(nn.Module):
             Tensor8: source masks with shape [batch * nlengths * nsamples, src_length]
 
         """
-        batch = src.size(0)
+        # batch = src.size(0)
         # batch_nlen = batch * nlengths
         # [batch, nlenths]
         # lengths, log_probs_length = self.predict_length(ctx, src_mask, topk=nlengths)
@@ -131,35 +134,30 @@ class Prior(nn.Module):
 
 
         # MY_CHANGES:
-        batch_nlen = batch
-        nlengths = 1
-        # lengths = src.new_ones(batch, 1)
-        max_length = 1
-        tgt_mask = src.new_ones(batch, 1)
-        # [batch * nlengths, nsamples, tgt_length, nz]
-        epsilon = src.new_empty(batch_nlen, nsamples, max_length, self.features).normal_()
-        # epsilon = epsilon.mul(tgt_mask.view(batch_nlen, 1, max_length, 1)) * tau
+        batch = src.size(0)
+        tgt_mask = src.new_ones(batch, length).to(src.device)
+
+        # [batch, nsamples, tgt_length, nz]
+        epsilon = src.new_empty(batch, nsamples, length, self.features).normal_()
+        # epsilon = epsilon.mul(tgt_mask.view(batch, 1, length, 1)) * tau
         if include_zero:
             epsilon[:, 0].zero_()
-        # [batch * nlengths * nsamples, tgt_length, nz]
-        epsilon = epsilon.view(-1, max_length, self.features)
-        if nsamples * nlengths > 1:
-            # [batch, nlengths * nsamples, src_length, hidden_size]
-            src = src.unsqueeze(1) + src.new_zeros(batch, nlengths * nsamples, *src.size()[1:])
-            # [batch * nlengths * nsamples, src_length, hidden_size]
-            src = src.view(batch_nlen * nsamples, *src.size()[2:])
-            # [batch, nlengths * nsamples, hidden_size]
-            ctx = ctx.unsqueeze(1) + ctx.new_zeros(batch, nlengths * nsamples, ctx.size(1))
-            # [batch * nlengths * nsamples, hidden_size]
-            ctx = ctx.view(batch_nlen * nsamples, ctx.size(2))
-            # [batch, nlengths * nsamples, src_length]
-            src_mask = src_mask.unsqueeze(1) + src_mask.new_zeros(batch, nlengths * nsamples, src_mask.size(1))
-            # [batch * nlengths * nsamples, src_length]
-            src_mask = src_mask.view(batch_nlen * nsamples, src_mask.size(2))
-            # [batch * nlengths, nsamples, tgt_length]
-            tgt_mask = tgt_mask.unsqueeze(1) + tgt_mask.new_zeros(batch_nlen, nsamples, tgt_mask.size(1))
-            # [batch * nlengths * nsamples, tgt_length]
-            tgt_mask = tgt_mask.view(batch_nlen * nsamples, tgt_mask.size(2))
+        # [batch * nsamples, tgt_length, nz]
+        epsilon = epsilon.view(-1, length, self.features)
+
+        if nsamples > 1:
+            # [batch, nsamples, src_length, hidden_size]
+            src = src.unsqueeze(1) + src.new_zeros(batch, nsamples, *src.size()[1:])
+            # [batch * nsamples, src_length, hidden_size]
+            src = src.view(batch * nsamples, *src.size()[2:])
+            # [batch, nsamples, src_length]
+            src_mask = src_mask.unsqueeze(1) + src_mask.new_zeros(batch, nsamples, src_mask.size(1))
+            # [batch * nsamples, src_length]
+            src_mask = src_mask.view(batch * nsamples, src_mask.size(2))
+            # [batch * nsamples, tgt_length]
+            tgt_mask = tgt_mask.unsqueeze(1) + tgt_mask.new_zeros(batch, nsamples, tgt_mask.size(1))
+            # [batch * nsamples, tgt_length]
+            tgt_mask = tgt_mask.view(batch * nsamples, tgt_mask.size(2))
 
         # [batch * nlength * nsamples, tgt_length, nz]
         z, log_probs = self.decode(epsilon, tgt_mask, src, src_mask)
