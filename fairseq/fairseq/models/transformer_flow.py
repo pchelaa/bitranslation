@@ -616,9 +616,9 @@ class TransformerDecoder(FairseqIncrementalDecoder):
               "label_smoothing": 0.1
             },
             "flow": {
-              "levels": 3,
-              "num_steps": [4, 4, 2],
-              "factors": [2, 2],
+              "levels": 2,
+              "num_steps": [4, 2],
+              "factors": [2],
               "hidden_features": args.decoder_embed_dim,
               "transform": "affine",
               "coupling_type": "self_attn",
