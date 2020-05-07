@@ -837,15 +837,16 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             #     z, _ = self.posterior.init(tgt_sents, tgt_masks, src_encoded, src_masks,
             #                                init_scale=1.0, init_mu=True, init_var=False)
 
-            z, posterior_log_probs = self.posterior.sample(
-                tgt_sents,
-                tgt_masks,
-                src_encoded,
-                src_masks,
-                nsamples=1
-            )
+            if self.num_updates > self.kl_init_steps:
+                z, posterior_log_probs = self.posterior.sample(
+                    tgt_sents,
+                    tgt_masks,
+                    src_encoded,
+                    src_masks,
+                    nsamples=1
+                )
 
-            z = z.squeeze(1)
+                z = z.squeeze(1)
 
             if self.num_updates > self.kl_init_steps:
 
