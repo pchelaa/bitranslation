@@ -845,6 +845,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 nsamples=1
             )
 
+            print("POSTERIOR_DEVICE", posterior_log_probs.device)
+
             z = z.squeeze(1)
 
             if self.num_updates > self.kl_init_steps:
@@ -861,6 +863,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                     src_encoded,
                     src_masks,
                 )
+
+                print("PRIOR_DEVICE", prior_log_probs.device)
 
                 # probablitiy clipping for dummies
                 # posterior_log_probs = torch.clamp(posterior_log_probs, min=-1000)

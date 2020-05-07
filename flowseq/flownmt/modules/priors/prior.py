@@ -164,8 +164,11 @@ class Prior(nn.Module):
         # return (z, log_probs, tgt_mask), (lengths, log_probs_length), (src, ctx, src_mask)
         return z, log_probs
 
-    def log_probability(self, z: torch.Tensor, tgt_mask: torch.Tensor,
-                        src: torch.Tensor, src_mask: torch.Tensor,
+    def log_probability(self,
+                        z: torch.Tensor,
+                        tgt_mask: torch.Tensor,
+                        src: torch.Tensor,
+                        src_mask: torch.Tensor,
                         ) -> Tuple[torch.Tensor, Union[torch.Tensor, None]]:
         """
 
@@ -176,8 +179,6 @@ class Prior(nn.Module):
                 tensor of target masks [batch, length]
             src: Tensor
                 source encoding [batch, src_length, hidden_size]
-            ctx: Tensor
-                tensor for global state [batch, hidden_size]
             src_mask: Tensor
                 tensor of source masks [batch, src_length]
             length_loss: bool (default True)
