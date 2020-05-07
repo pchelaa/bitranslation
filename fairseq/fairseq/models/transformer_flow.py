@@ -938,7 +938,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        return (x, None, None), {"attn": [attn], "inner_states": inner_states}
+        return (x, prior_log_probs, posterior_log_probs), {"attn": [attn], "inner_states": inner_states}
 
     def output_layer(self, features):
         """Project features to the vocabulary size."""
