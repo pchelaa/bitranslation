@@ -13,49 +13,15 @@ class Prior(nn.Module):
     """
     _registry = dict()
 
-    def __init__(self, flow: NMTFlow, length_predictor: LengthPredictor):
+    def __init__(self, flow: NMTFlow):
         super(Prior, self).__init__()
         assert flow.inverse, 'prior flow should have inverse mode'
         self.flow = flow
         self.length_unit = max(2, 2 ** (self.flow.levels - 1))
         self.features = self.flow.features
-        self._length_predictor = length_predictor
-        self._length_predictor.set_length_unit(self.length_unit)
 
     def sync(self):
         self.flow.sync()
-
-    def predict_length(self, ctx: torch.Tensor, src_mask: torch.Tensor, topk: int = 1) -> Tuple[torch.LongTensor, torch.Tensor]:
-        """
-        Args:
-            ctx: Tensor
-                tensor [batch, features]
-            src_mask: Tensor
-                tensor for source mask [batch, src_length]
-            topk: int (default 1)
-                return top k length candidates for each src sentence
-        Returns: LongTensor1, Tensor2
-            LongTensor1: tensor for lengths [batch, topk]
-            Tensor2: log probs for each length [batch, topk]
-        """
-        return self._length_predictor.predict(ctx, src_mask, topk=topk)
-
-    def length_loss(self, ctx: torch.Tensor, src_mask: torch.Tensor, tgt_mask: torch.Tensor) -> torch.Tensor:
-        """
-
-        Args:
-            ctx: Tensor
-                tensor [batch, features]
-            src_mask: Tensor
-                tensor for source mask [batch, src_length]
-            tgt_mask: Tensor
-                tensor for target mask [batch, tgt_length]
-
-        Returns: Tensor
-            tensor for loss [batch]
-
-        """
-        return self._length_predictor.loss(ctx, src_mask, tgt_mask)
 
     def decode(self, epsilon: torch.Tensor, tgt_mask: torch.Tensor,
                src: torch.Tensor, src_mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -181,18 +147,10 @@ class Prior(nn.Module):
                 source encoding [batch, src_length, hidden_size]
             src_mask: Tensor
                 tensor of source masks [batch, src_length]
-            length_loss: bool (default True)
-                compute loss of length
 
-        Returns: Tensor1, Tensor2
-        Returns: Tensor1, Tensor2
-            Tensor1: log probabilities of z [batch]
-            Tensor2: length loss [batch]
+        Returns: log probabilities of z [batch]
 
         """
-        # [batch]
-        # we don't need this
-        # loss_length = self.length_loss(ctx, src_mask, tgt_mask) if length_loss else None
 
         # [batch, length, nz]
         epsilon, logdet = self.flow.bwdpass(z, tgt_mask, src, src_mask)
@@ -218,9 +176,7 @@ class Prior(nn.Module):
     def from_params(cls, params: Dict) -> "Prior":
         flow_params = params.pop('flow')
         flow = NMTFlow.from_params(flow_params)
-        predictor_params = params.pop('length_predictor')
-        length_predictor = LengthPredictor.by_name(predictor_params.pop('type')).from_params(predictor_params)
-        return Prior(flow, length_predictor)
+        return Prior(flow)
 
 
 Prior.register('normal')
