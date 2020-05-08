@@ -869,16 +869,14 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 # print(prior_log_probs)
 
         else:
-            if self.num_updates > self.kl_init_steps:
-                z, prior_log_probs = self.prior.sample(
-                    src_encoded,
-                    src_masks,
-                    length=x.shape[0],
-                    nsamples=1
-                )
+            z, prior_log_probs = self.prior.sample(
+                src_encoded,
+                src_masks,
+                length=x.shape[0],
+                nsamples=1
+            )
 
-        if self.num_updates > self.kl_init_steps:
-            x += z.transpose(0, 1)
+        x += z.transpose(0, 1)
 
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.padding_idx).any():
