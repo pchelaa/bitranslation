@@ -619,7 +619,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
               "levels": 2,
               "num_steps": [4, 2],
               "factors": [2],
-              "hidden_features": args.decoder_embed_dim,
+              "hidden_features": 128,
               "transform": "affine",
               "coupling_type": "self_attn",
               "heads": 4,
