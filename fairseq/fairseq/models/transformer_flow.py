@@ -622,7 +622,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
               "hidden_features": 128,
               "transform": "affine",
               "coupling_type": "self_attn",
-              "heads": 4,
+              "heads": 8,
               "pos_enc": "attn",
               "max_length": args.max_target_positions,
               "dropout": 0.0,
