@@ -858,8 +858,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 nsamples=1
             )
 
-        z = torch.max(z, dim=1)[0].unsqueeze(1).transpose(0, 1)
-        x += z
+        x += z.transpose(0, 1)
 
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.padding_idx).any():
