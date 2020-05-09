@@ -165,6 +165,8 @@ class TransformerBidirectionalModel(FairseqEncoderDecoderModel):
                             help='if True, dont scale embeddings')
         parser.add_argument('--kl-init-steps', default=30000, type=int, metavar='N',
                             help='number of iterations before calculating kl')
+        parser.add_argument('--kl-warmup-steps', default=10000, type=int, metavar='N',
+                            help='number of iterations of kl warmup')
         # fmt: on
 
     @classmethod
