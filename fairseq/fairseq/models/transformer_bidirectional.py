@@ -524,7 +524,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
     def get_lang_decoder(
         self,
-        lang_token: Optional[string] = ""
+        lang_token: Optional[Any] = None
     ):
         if lang_token in self.lang_decoders.keys():
             return self.lang_decoders[lang_token]
@@ -544,7 +544,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         alignment_heads: Optional[int] = None,
         src_lengths: Optional[Any] = None,
         return_all_hiddens: bool = False,
-        lang_token: Optional[string] = ""
+        lang_token: Optional[Any] = None
     ):
         """
         Args:
