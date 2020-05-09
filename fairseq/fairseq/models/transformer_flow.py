@@ -832,11 +832,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             tgt_sents = self.reverse_tensor(prev_output_tokens, dim=1)
             tgt_masks = self.reverse_tensor((prev_output_tokens.eq(self.padding_idx) == 0).float(), dim=1)
 
-            # Probably should be here
-            # if self.num_updates == 0:
-            #     z, _ = self.posterior.init(tgt_sents, tgt_masks, src_encoded, src_masks,
-            #                                init_scale=1.0, init_mu=True, init_var=False)
-
             z, posterior_log_probs = self.posterior.sample(
                 tgt_sents,
                 tgt_masks,
@@ -848,25 +843,12 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             z = z.squeeze(1)
 
             if self.num_updates > self.kl_init_steps:
-
-                # Probably should be here
-                # if self.num_updates == self.kl_init_steps:
-                #     z_, _ = self.posterior.init(tgt_sents, tgt_masks, src_encoded, src_masks,
-                #                                 init_scale=1.0, init_mu=False, init_var=True)
-                #     self.prior.init(z_.squeeze(1), tgt_masks, src_encoded, src_masks, init_scale=1.0)
-
                 prior_log_probs = self.prior.log_probability(
                     z,
                     tgt_masks,
                     src_encoded,
                     src_masks,
                 )
-
-                # probablitiy clipping for dummies
-                # posterior_log_probs = torch.clamp(posterior_log_probs, min=-1000)
-                # prior_log_probs = torch.clamp(prior_log_probs, min=1.1*torch.min(posterior_log_probs).data)
-                # print(posterior_log_probs)
-                # print(prior_log_probs)
 
         else:
             z, prior_log_probs = self.prior.sample(
@@ -876,7 +858,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 nsamples=1
             )
 
-        x += z.transpose(0, 1)
+        z = torch.max(z, dim=1)[0].unsqueeze(1).transpose(0, 1)
+        x += z
 
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.padding_idx).any():
