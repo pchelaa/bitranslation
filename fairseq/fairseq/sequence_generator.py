@@ -273,7 +273,7 @@ class SequenceGenerator(object):
                 encoder_outs = model.reorder_encoder_out(encoder_outs, reorder_state)
 
             decoder_output = model.forward_decoder(
-                tokens[:, :step + 1], encoder_outs, temperature=self.temperature,
+                tokens[:, :step + 1], encoder_outs, temperature=self.temperature, first_tokens=src_tokens[:, 0]
             )
 
             lprobs = model.get_logits(decoder_output)
@@ -529,7 +529,7 @@ class EnsembleModel(torch.nn.Module):
         return [model.encoder(**encoder_input) for model in self.models]
 
     @torch.no_grad()
-    def forward_decoder(self, tokens, encoder_outs, temperature=1.):
+    def forward_decoder(self, tokens, encoder_outs, temperature=1., first_tokens=None):
         if len(self.models) == 1:
             return self._decode_one(
                 tokens,
@@ -538,6 +538,7 @@ class EnsembleModel(torch.nn.Module):
                 self.incremental_states,
                 log_probs=True,
                 temperature=temperature,
+                first_tokens=first_tokens,
             )
 
         log_probs = []
@@ -550,6 +551,7 @@ class EnsembleModel(torch.nn.Module):
                 self.incremental_states,
                 log_probs=True,
                 temperature=temperature,
+                first_tokens=first_tokens,
             )
             log_probs.append(probs)
             if attn is not None:
@@ -565,13 +567,14 @@ class EnsembleModel(torch.nn.Module):
     def _decode_one(
         self, tokens, model, encoder_out, incremental_states, log_probs,
         temperature=1.,
+        first_tokens=None,
     ):
         if self.incremental_states is not None:
             decoder_out = list(model.forward_decoder(
-                tokens, encoder_out=encoder_out, incremental_state=self.incremental_states[model],
+                tokens, encoder_out=encoder_out, incremental_state=self.incremental_states[model], first_tokens=first_tokens
             ))
         else:
-            decoder_out = list(model.forward_decoder(tokens, encoder_out=encoder_out))
+            decoder_out = list(model.forward_decoder(tokens, encoder_out=encoder_out, first_tokens=first_tokens))
 
         logits = model.get_logits(decoder_out)
         logits = logits[:, -1:, :]
@@ -710,15 +713,17 @@ class EnsembleModelWithAlignment(EnsembleModel):
     def _decode_one(
         self, tokens, model, encoder_out, incremental_states, log_probs,
         temperature=1.,
+        first_tokens=None
     ):
         if self.incremental_states is not None:
             decoder_out = list(model.forward_decoder(
                 tokens,
                 encoder_out=encoder_out,
                 incremental_state=self.incremental_states[model],
+                first_tokens=first_tokens
             ))
         else:
-            decoder_out = list(model.forward_decoder(tokens, encoder_out=encoder_out))
+            decoder_out = list(model.forward_decoder(tokens, encoder_out=encoder_out, first_tokens=first_tokens))
 
         logits = model.get_logits(decoder_out)
         logits = logits[:, -1:, :]

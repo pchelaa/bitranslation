@@ -13,6 +13,7 @@ skip_unpack_files=false
 skip_preprocess_train_data=false
 skip_preprocess_test_data=false
 skip_merge_data=false
+skip_shuffle_data=false
 skip_learn_bpe=false
 skip_fairseq_preprocess=false
 skip_remove_tmp_dirs=false
@@ -33,6 +34,7 @@ Options:\n
   --skip-preprocess-train-data\tSkip preprocess train data (default=$skip_preprocess_train_data).\n
   --skip-preprocess-test-data\tSkip preprocess test data (default=$skip_preprocess_test_data).\n
   --skip-merge-data\t\tSkip merge data (default=$skip_merge_data).\n
+  --skip-shuffle-data\t\tSkip shuffle data (default=$skip_shuffle_data).\n
   --skip-learn-bpe\t\tSkip learn bpe (default=$skip_learn_bpe).\n
   --skip-fairseq-preprocess\tSkip fairseq preprocess (default=$skip_fairseq_preprocess).\n
   --skip-remove-tmp-dirs\t\tSkip remove temporary directories (default=$skip_remove_tmp_dirs).\n
@@ -63,6 +65,8 @@ while [ $# -gt 0 ]; do
             shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_preprocess_test_data=${1}; shift; else skip_preprocess_test_data=true; fi ;;
         --skip-merge-data)
              shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_merge__data=${1};         shift; else skip_merge_data=true; fi ;;
+        --skip-shuffle-data)
+            shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_shuffle_data=${1}; shift; else skip_shuffle_data=true; fi ;;
         --skip-learn-bpe)
             shift; if [ "${1}" == "true"  ] || [ "${1}" == "false"  ]; then skip_learn_bpe=${1}; shift; else skip_learn_bpe=true; fi ;;
         --skip-fairseq-preprocess)
@@ -314,13 +318,7 @@ if [ $skip_merge_data == false ]; then
         rm -f $merged_dir/$f.$target_lang
         for ((i=${#langs[@]};i>0;--i)); do
              L=${langs[i-1]}
-             token=${tokens[i-1]}
-
-            if [ ! -z "$token" ]; then
-                awk -v token=$token '{print token" "$0; }' $tmp_dir/$f.$L >> $merged_dir/$f.$target_lang
-            else
-                awk '{print $0; }' $tmp_dir/$f.$L >> $merged_dir/$f.$target_lang
-            fi
+             awk '{print $0; }' $tmp_dir/$f.$L >> $merged_dir/$f.$target_lang
         done
     done
 
@@ -337,11 +335,22 @@ if [ $skip_merge_data == false ]; then
 
         if  [ ! -z "$token" ]; then
             awk -v token=$token '{ print token" "$0; }' $tmp_dir/test.$L > $merged_dir/$L1-$L2.$source_lang
-            awk -v token=$token '{ print token" "$0; }' $tmp_dir/test.$L > $merged_dir/$L2-$L1.$target_lang
         else
             awk '{ print $0; }' $tmp_dir/test.$L > $merged_dir/$L1-$L2.$source_lang
-            awk '{ print $0; }' $tmp_dir/test.$L > $merged_dir/$L2-$L1.$target_lang
         fi
+        awk '{ print $0; }' $tmp_dir/test.$L > $merged_dir/$L2-$L1.$target_lang
+    done
+fi
+
+############################################################################################################
+
+if [ $skip_shuffle_data == false ]; then
+    for f in train valid en-fr fr-en; do
+        for l in $source_lang $target_lang; do
+            shuf $merged_dir/$f.$l --random-source=<(openssl enc -aes-256-ctr -pass pass:"42" --nosalt </dev/zero 2>/dev/null) >$merged_dir/$f.$l.shuffled
+            rm -f $merged_dir/$f.$l
+            mv $merged_dir/$f.$l.shuffled $merged_dir/$f.$l
+        done
     done
 fi
 

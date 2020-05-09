@@ -227,7 +227,7 @@ if [ $skip_unpack_files == false ]; then
 
     for l in $source_lang $target_lang; do
         for f in "${CORPORA[@]}"; do
-            awk '{if (NR%31 == 0)  print $0; }' $src_dir/$f.$l > $src_dir/$f.$l.filtered
+            awk '{if (NR%62 == 0)  print $0; }' $src_dir/$f.$l > $src_dir/$f.$l.filtered
             rm -f $src_dir/$f.$l
             mv $src_dir/$f.$l.filtered $src_dir/$f.$l
         done
