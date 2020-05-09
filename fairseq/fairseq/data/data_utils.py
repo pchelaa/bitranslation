@@ -234,6 +234,22 @@ def batch_by_size(
 
     return batch_by_size_fast(indices, num_tokens_fn, max_tokens, max_sentences, bsz_mult)
 
+def batch_by_first_token(
+    batch_sampler,
+    fn_first_token
+):
+    target_sampler = []
+    for source_batch in batch_sampler:
+        target_batches = {}
+        for idx in source_batch:
+            first_token = fn_first_token(idx).item()
+            if first_token not in target_batches.keys():
+                target_batches[first_token] = []
+            target_batches[first_token].append(idx)
+        for target_batch in target_batches.values():
+            target_sampler.append(target_batch)
+    return target_sampler
+
 
 def process_bpe_symbol(sentence: str, bpe_symbol: str):
     if bpe_symbol == 'sentencepiece':

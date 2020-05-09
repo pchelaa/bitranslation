@@ -274,6 +274,9 @@ class IndexedRawTextDataset(FairseqDataset):
     def num_tokens(self, index):
         return self.sizes[index]
 
+    def first_token(self, index):
+        return self.tokens_list[index][0]
+
     def size(self, index):
         return self.sizes[index]
 
@@ -475,7 +478,6 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
         np_array = np.frombuffer(self._bin_buffer, dtype=self._index.dtype, count=size, offset=ptr)
         if self._index.dtype != np.int64:
             np_array = np_array.astype(np.int64)
-
         return torch.from_numpy(np_array)
 
     @property
