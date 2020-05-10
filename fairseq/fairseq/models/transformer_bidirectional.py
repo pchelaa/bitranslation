@@ -524,17 +524,18 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
     def get_lang_decoder(
         self,
-        first_token: Optional[Any] = None
+        first_tokens: Optional[Any] = None
     ):
-        if first_token in self.lang_decoders.keys():
-            return self.lang_decoders[first_token]
+        key = first_tokens[0].item()
+        if key in self.lang_decoders.keys():
+            return self.lang_decoders[key]
         if not self.training:
             return None
 
         print("NUMBER OF DECODERS", len(self.lang_decoders))
 
         decoder = TransformerLanguageDecoder(self.args, self.dictionary, self.embed_tokens, self.no_encoder_attn).to(first_tokens.device)
-        self.lang_decoders[first_token] = decoder
+        self.lang_decoders[key] = decoder
         return decoder
 
     def forward(
@@ -567,7 +568,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         """
 
 
-        decoder = self.get_lang_decoder(first_tokens[0].item())
+        decoder = self.get_lang_decoder(first_tokens)
         if decoder is None:
             return None
 
@@ -610,7 +611,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
-        decoder = self.get_lang_decoder(first_tokens[0].item())
+        decoder = self.get_lang_decoder(first_tokens)
         if decoder is None:
             return None
 
