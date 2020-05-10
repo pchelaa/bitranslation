@@ -41,6 +41,8 @@ def load_langpair_dataset(
     left_pad_source, left_pad_target, max_source_positions,
     max_target_positions, prepend_bos=False, load_alignments=False,
     truncate_source=False, append_source_id=False
+    even_source = 0,
+    even_target = 0,
 ):
 
     def split_exists(split, src, tgt, lang, data_path):
@@ -65,7 +67,8 @@ def load_langpair_dataset(
                 raise FileNotFoundError('Dataset not found: {} ({})'.format(split, data_path))
 
         src_dataset = data_utils.load_indexed_dataset(prefix + src, src_dict, dataset_impl)
-        src_dataset = EvenDataset(src_dataset, src_dict.eos())
+        if even_source:
+            src_dataset = EvenDataset(src_dataset, src_dict.eos())
         if truncate_source:
             src_dataset = AppendTokenDataset(
                 TruncateDataset(
@@ -78,7 +81,8 @@ def load_langpair_dataset(
 
         tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, tgt_dict, dataset_impl)
         if tgt_dataset is not None:
-            tgt_dataset = EvenDataset(tgt_dataset, tgt_dict.eos())
+            if even_target:
+                tgt_dataset = EvenDataset(tgt_dataset, tgt_dict.eos())
             tgt_datasets.append(tgt_dataset)
 
         logger.info('{} {} {}-{} {} examples'.format(
@@ -121,8 +125,10 @@ def load_langpair_dataset(
         if indexed_dataset.dataset_exists(align_path, impl=dataset_impl):
             align_dataset = data_utils.load_indexed_dataset(align_path, None, dataset_impl)
 
-    src_dataset = EvenDataset(src_dataset, src_dict.eos())
-    tgt_dataset = EvenDataset(tgt_dataset, tgt_dict.eos())
+    if even_source:
+        src_dataset = EvenDataset(src_dataset, src_dict.eos())
+    if even_target:
+        tgt_dataset = EvenDataset(tgt_dataset, tgt_dict.eos())
 
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
     return LanguagePairDataset(
@@ -182,6 +188,10 @@ class TranslationTask(FairseqTask):
                             help='amount to upsample primary dataset')
         parser.add_argument('--truncate-source', action='store_true', default=False,
                             help='truncate source to max-source-positions')
+        parser.add_argument('--even-source', default=1, type=int,
+                            help='make even number of tokens for source dataset ')
+        parser.add_argument('--even-target', default=1, type=int,
+                            help='make even number of tokens for target dataset ')
 
         # options for reporting BLEU during validation
         parser.add_argument('--eval-bleu', action='store_true',
@@ -261,6 +271,8 @@ class TranslationTask(FairseqTask):
             max_target_positions=self.args.max_target_positions,
             load_alignments=self.args.load_alignments,
             truncate_source=self.args.truncate_source,
+            even_source=self.args.even_source,
+            even_target=self.args.even_target,
         )
 
     def build_dataset_for_inference(self, src_tokens, src_lengths):
