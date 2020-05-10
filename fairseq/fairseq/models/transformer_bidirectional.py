@@ -517,23 +517,19 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
     def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False):
         super().__init__(dictionary)
-        self.args = args
-        self.embed_tokens = embed_tokens
-        self.no_encoder_attn = no_encoder_attn
-        self.lang_decoders = {}
+
+        self.lang_decoders = []
+        for _ in range(2):
+            self.lang_decoders.append(TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn))
+        self.lang_tokens = {}
 
     def get_lang_decoder(
         self,
         lang_token: Optional[Any] = None
     ):
-        if lang_token in self.lang_decoders.keys():
-            return self.lang_decoders[lang_token]
-        if not self.training:
-            return None
-
-        decoder = TransformerLanguageDecoder(self.args, self.dictionary, self.embed_tokens, self.no_encoder_attn).to(lang_token)
-        self.lang_decoders[lang_token] = decoder
-        return decoder
+        if lang_token not in self.lang_tokens.keys() and self.training:
+            self.lang_tokens[lang_token] = len(self.lang_tokens)
+        return self.lang_decoders[self.lang_tokens[lang_token]]
 
     def forward(
         self,
