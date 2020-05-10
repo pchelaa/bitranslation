@@ -272,7 +272,6 @@ class IndexedRawTextDataset(FairseqDataset):
         return self.size
 
     def num_tokens(self, index):
-    def num_tokens(self, index):
         return self.sizes[index]
 
     def first_token(self, index):
