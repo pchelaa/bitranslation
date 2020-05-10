@@ -623,6 +623,23 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             alignment_heads,
         )
 
+    def output_layer(self, features, **kwargs):
+        """
+        Project features to the default output size, e.g., vocabulary size.
+
+        Args:
+            features (Tensor): features returned by *extract_features*.
+        """
+        return self.decoder.output_layer(features, **kwargs)
+
+    def max_positions(self):
+        """Maximum input length supported by the decoder."""
+        return self.decoder.max_positions()
+
+    def upgrade_state_dict_named(self, state_dict, name):
+        """Upgrade a (possibly old) state dict for new versions of fairseq."""
+        return self.decoder.upgrade_state_dict_named(state_dict, name)
+
     def reorder_incremental_state(self, incremental_state, new_order):
         """Reorder incremental state.
 
