@@ -259,6 +259,7 @@ class IndexedRawTextDataset(FairseqDataset):
     @lru_cache(maxsize=8)
     def __getitem__(self, i):
         self.check_index(i)
+        print(self.tokens_list[index])
         return self.tokens_list[i]
 
     def get_original_text(self, i):
@@ -275,7 +276,6 @@ class IndexedRawTextDataset(FairseqDataset):
         return self.sizes[index]
 
     def first_token(self, index):
-        print(self.tokens_list[index])
         return self.tokens_list[index][0]
 
     def size(self, index):
