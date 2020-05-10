@@ -280,7 +280,7 @@ class TransformerBidirectionalModel(FairseqEncoderDecoderModel):
             alignment_heads=alignment_heads,
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
-            lang_token=src_tokens[0]
+            first_tokens=src_tokens[0]
         )
 
         return decoder_out
@@ -524,16 +524,16 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
     def get_lang_decoder(
         self,
-        lang_token: Optional[Any] = None
+        first_tokens: Optional[Any] = None
     ):
-        print(lang_token)
-        if lang_token in self.lang_decoders.keys():
-            return self.lang_decoders[lang_token]
+        print(first_tokens)
+        if first_tokens in self.lang_decoders.keys():
+            return self.lang_decoders[first_tokens]
         if not self.training:
             return None
 
-        decoder = TransformerLanguageDecoder(self.args, self.dictionary, self.embed_tokens, self.no_encoder_attn).to(lang_token.device)
-        self.lang_decoders[lang_token] = decoder
+        decoder = TransformerLanguageDecoder(self.args, self.dictionary, self.embed_tokens, self.no_encoder_attn).to(first_tokens.device)
+        self.lang_decoders[first_tokens] = decoder
         return decoder
 
     def forward(
@@ -546,7 +546,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         alignment_heads: Optional[int] = None,
         src_lengths: Optional[Any] = None,
         return_all_hiddens: bool = False,
-        lang_token: Optional[Any] = None
+        first_tokens: Optional[Any] = None
     ):
         """
         Args:
@@ -566,7 +566,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         """
 
 
-        decoder = self.get_lang_decoder(lang_token[0])
+        decoder = self.get_lang_decoder(first_tokens[0])
         if decoder is None:
             return None
 
@@ -609,7 +609,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
-        decoder = self.get_lang_decoder(lang_token[0])
+        decoder = self.get_lang_decoder(first_tokens[0])
         if decoder is None:
             return None
 
