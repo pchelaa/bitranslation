@@ -828,15 +828,9 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         if self.training:
             tgt_sents = torch.zeros_like(prev_output_tokens, device=prev_output_tokens.device)
-<<<<<<< HEAD
             #tgt_sents[:, :-1] = prev_output_tokens[:, 1:]
             #tgt_sents[:, -1] = prev_output_tokens[:, 0]
             tgt_masks = (prev_output_tokens.eq(self.padding_idx) == 0).float()
-=======
-            tgt_sents[:, :-1] = prev_output_tokens[:, 1:]
-            tgt_sents[:, -1] = prev_output_tokens[:, 0]
-            tgt_masks = (prev_output_tokens.eq(self.eos_idx) == 0).float()
->>>>>>> 56b68c0b0ede80b9c74bb12a9db3ccf27cd08315
 
             z, posterior_log_probs = self.posterior.sample(
                 tgt_sents,
