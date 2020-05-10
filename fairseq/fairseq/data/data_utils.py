@@ -199,7 +199,7 @@ def filter_by_size(indices, dataset, max_positions, raise_exception=False):
 
 
 def batch_by_size(
-    indices, first_token_fn, num_tokens_fn, max_tokens=None, max_sentences=None,
+    indices, num_tokens_fn, max_tokens=None, max_sentences=None,
     required_batch_size_multiple=1,
 ):
     """
@@ -208,8 +208,6 @@ def batch_by_size(
 
     Args:
         indices (List[int]): ordered list of dataset indices
-        first_token_fn (callable): function that returns the first token at
-            a given index
         num_tokens_fn (callable): function that returns the number of tokens at
             a given index
         max_tokens (int, optional): max number of tokens in each batch
@@ -234,7 +232,7 @@ def batch_by_size(
     if isinstance(indices, types.GeneratorType):
         indices = np.fromiter(indices, dtype=np.int64, count=-1)
 
-    return batch_by_size_fast(indices, first_token_fn, num_tokens_fn, max_tokens, max_sentences, bsz_mult)
+    return batch_by_size_fast(indices, num_tokens_fn, max_tokens, max_sentences, bsz_mult)
 
 
 def process_bpe_symbol(sentence: str, bpe_symbol: str):

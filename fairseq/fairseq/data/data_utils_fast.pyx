@@ -13,11 +13,9 @@ DTYPE = np.int64
 ctypedef np.int64_t DTYPE_t
 
 
-cdef _is_batch_full(list batch, long num_tokens, long max_tokens, long max_sentences, prev_first_token, first_token):
+cdef _is_batch_full(list batch, long num_tokens, long max_tokens, long max_sentences):
     if len(batch) == 0:
         return 0
-    if prev_first_token >= 0 and prev_first_token != first_token:
-        return 1
     if max_sentences > 0 and len(batch) == max_sentences:
         return 1
     if max_tokens > 0 and num_tokens > max_tokens:
@@ -28,7 +26,6 @@ cdef _is_batch_full(list batch, long num_tokens, long max_tokens, long max_sente
 @cython.cdivision(True)
 cpdef list batch_by_size_fast(
     np.ndarray[DTYPE_t, ndim=1] indices,
-    first_token_fn,
     num_tokens_fn,
     long max_tokens,
     long max_sentences,
@@ -44,10 +41,8 @@ cpdef list batch_by_size_fast(
     cdef long num_tokens
     cdef DTYPE_t[:] indices_view = indices
 
-    prev_first_token = -1
     for i in range(len(indices_view)):
         idx = indices_view[i]
-        first_token = first_token_fn(idx)
         num_tokens = num_tokens_fn(idx)
         sample_lens.append(num_tokens)
         sample_len = max(sample_len, num_tokens)
@@ -58,7 +53,7 @@ cpdef list batch_by_size_fast(
         )
         num_tokens = (len(batch) + 1) * sample_len
 
-        if _is_batch_full(batch, num_tokens, max_tokens, max_sentences, prev_first_token, first_token):
+        if _is_batch_full(batch, num_tokens, max_tokens, max_sentences):
             mod_len = max(
                 bsz_mult * (len(batch) // bsz_mult),
                 len(batch) % bsz_mult,
@@ -67,7 +62,6 @@ cpdef list batch_by_size_fast(
             batch = batch[mod_len:]
             sample_lens = sample_lens[mod_len:]
             sample_len = max(sample_lens) if len(sample_lens) > 0 else 0
-        prev_first_token = first_token
         batch.append(idx)
     if len(batch) > 0:
         batches.append(batch)

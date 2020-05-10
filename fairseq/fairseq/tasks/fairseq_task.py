@@ -175,18 +175,28 @@ class FairseqTask(object):
         # create mini-batches with given size constraints
         batch_sampler = data_utils.batch_by_size(
             indices,
-            dataset.first_token,
             dataset.num_tokens,
             max_tokens=max_tokens,
             max_sentences=max_sentences,
             required_batch_size_multiple=required_batch_size_multiple,
         )
 
+        new_batch_sampler = []
+        for batch in batch_sampler:
+            batches = {}
+            for idx : batch:
+                first_token = dataset.first_token(idx)
+                if first_token not in batches.keys():
+                    batches[first_token] = []
+                batches[first_token].append(idx)
+            for b in batches.values():
+                new_batches_sampler.append(b)
+
         # return a reusable, sharded iterator
         epoch_iter = iterators.EpochBatchIterator(
             dataset=dataset,
             collate_fn=dataset.collater,
-            batch_sampler=batch_sampler,
+            batch_sampler=new_batch_sampler,
             seed=seed,
             num_shards=num_shards,
             shard_id=shard_id,
