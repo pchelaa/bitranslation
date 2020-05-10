@@ -526,7 +526,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         self,
         first_tokens: Optional[Any] = None
     ):
-        print(first_tokens)
+        print("FIRST_TOKEN", first_tokens)
         if first_tokens in self.lang_decoders.keys():
             return self.lang_decoders[first_tokens]
         if not self.training:
