@@ -196,7 +196,7 @@ class FairseqTask(object):
         epoch_iter = iterators.EpochBatchIterator(
             dataset=dataset,
             collate_fn=dataset.collater,
-            batch_sampler=new_batch_sampler,
+            batch_sampler=batch_sampler,
             seed=seed,
             num_shards=num_shards,
             shard_id=shard_id,
