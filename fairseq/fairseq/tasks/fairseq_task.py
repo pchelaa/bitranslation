@@ -185,7 +185,7 @@ class FairseqTask(object):
         for batch in batch_sampler:
             batches = {}
             for idx in batch:
-                first_token = dataset.first_token(idx)
+                first_token = dataset.first_token(idx).item()
                 print(first_token)
                 if first_token not in batches.keys():
                     batches[first_token] = []
