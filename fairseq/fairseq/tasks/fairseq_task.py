@@ -181,23 +181,16 @@ class FairseqTask(object):
             required_batch_size_multiple=required_batch_size_multiple,
         )
 
-        new_batch_sampler = []
-        for batch in batch_sampler:
-            batches = {}
-            for idx in batch:
-                first_token = dataset.first_token(idx).item()
-                print(first_token)
-                if first_token not in batches.keys():
-                    batches[first_token] = []
-                batches[first_token].append(idx)
-            for b in batches.values():
-                new_batch_sampler.append(b)
+        batch_samble = data_utils.batch_by_first_token(
+            batch_sampler,
+            dataset.first_token
+        )
 
         # return a reusable, sharded iterator
         epoch_iter = iterators.EpochBatchIterator(
             dataset=dataset,
             collate_fn=dataset.collater,
-            batch_sampler=new_batch_sampler,
+            batch_sampler=batch_sampler,
             seed=seed,
             num_shards=num_shards,
             shard_id=shard_id,
