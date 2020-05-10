@@ -264,8 +264,8 @@ class LanguagePairDataset(FairseqDataset):
         return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
 
     def first_token(self, index):
-        print("FIRST_TOKEN", self.src[index][-1])
-        return self.src[index][-1]
+        print("FIRST_TOKEN", self.src[index][-2])
+        return self.src[index][-2]
 
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when
