@@ -147,7 +147,6 @@ class IndexedDataset(FairseqDataset):
 
     @lru_cache(maxsize=8)
     def __getitem__(self, i):
-        print("Indexed")
         if not self.data_file:
             self.read_data(self.path)
         self.check_index(i)
@@ -217,7 +216,6 @@ class IndexedCachedDataset(IndexedDataset):
 
     @lru_cache(maxsize=8)
     def __getitem__(self, i):
-        print("CACHED")
         self.check_index(i)
         tensor_size = self.sizes[self.dim_offsets[i]:self.dim_offsets[i + 1]]
         a = np.empty(tensor_size, dtype=self.dtype)
@@ -261,7 +259,6 @@ class IndexedRawTextDataset(FairseqDataset):
     @lru_cache(maxsize=8)
     def __getitem__(self, i):
         self.check_index(i)
-        print("RAW")
         return self.tokens_list[i]
 
     def get_original_text(self, i):
@@ -274,6 +271,7 @@ class IndexedRawTextDataset(FairseqDataset):
     def __len__(self):
         return self.size
 
+    def num_tokens(self, index):
     def num_tokens(self, index):
         return self.sizes[index]
 
@@ -439,7 +437,6 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
 
         @lru_cache(maxsize=8)
         def __getitem__(self, i):
-            print("Index")
             return self._pointers[i], self._sizes[i]
 
         def __len__(self):
@@ -478,12 +475,11 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
 
     @lru_cache(maxsize=8)
     def __getitem__(self, i):
-        print("MMAP")
         ptr, size = self._index[i]
         np_array = np.frombuffer(self._bin_buffer, dtype=self._index.dtype, count=size, offset=ptr)
         if self._index.dtype != np.int64:
             np_array = np_array.astype(np.int64)
-
+        print(np_array)
         return torch.from_numpy(np_array)
 
     @property
