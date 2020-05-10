@@ -531,8 +531,9 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         if not self.training:
             return None
 
-        self.lang_decoders[lang_token] = TransformerLanguageDecoder(self.args, self.dictionary, self.embed_tokens, self.no_encoder_attn)
-        return self.lang_decoders[lang_token]
+        decoder = TransformerLanguageDecoder(self.args, self.dictionary, self.embed_tokens, self.no_encoder_attn).to(lang_token)
+        self.lang_decoders[lang_token] = decoder
+        return decoder
 
     def forward(
         self,
