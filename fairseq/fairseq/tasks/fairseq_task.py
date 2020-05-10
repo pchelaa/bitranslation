@@ -186,13 +186,12 @@ class FairseqTask(object):
             batches = {}
             for idx in batch:
                 first_token = dataset.first_token(idx)
+                print(first_token)
                 if first_token not in batches.keys():
                     batches[first_token] = []
                 batches[first_token].append(idx)
             for b in batches.values():
                 new_batch_sampler.append(b)
-
-        print(new_batch_sampler)
 
         # return a reusable, sharded iterator
         epoch_iter = iterators.EpochBatchIterator(
