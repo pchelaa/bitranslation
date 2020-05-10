@@ -532,9 +532,9 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             return None
 
         print("NUMBER OF DECODERS", len(self.lang_decoders))
-        
+
         decoder = TransformerLanguageDecoder(self.args, self.dictionary, self.embed_tokens, self.no_encoder_attn).to(first_tokens.device)
-        self.lang_decoders[first_tokens] = decoder
+        self.lang_decoders[first_token] = decoder
         return decoder
 
     def forward(
