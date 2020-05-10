@@ -112,6 +112,7 @@ class FairseqTask(object):
         max_positions=None,
         ignore_invalid_inputs=False,
         required_batch_size_multiple=1,
+        group_by_first_token=0,
         seed=1,
         num_shards=1,
         shard_id=0,
@@ -133,6 +134,8 @@ class FairseqTask(object):
                 sentences that are too long (default: False).
             required_batch_size_multiple (int, optional): require batch size to
                 be a multiple of N (default: 1).
+           group_by_first_token (int, optional): require batch  to
+                be grouped by first token (default: 0).
             seed (int, optional): seed for random number generator for
                 reproducibility (default: 1).
             num_shards (int, optional): shard the data iterator into N
@@ -181,10 +184,11 @@ class FairseqTask(object):
             required_batch_size_multiple=required_batch_size_multiple,
         )
 
-        batch_samble = data_utils.batch_by_first_token(
-            batch_sampler,
-            dataset.first_token
-        )
+        if group_by_first_token:
+            batch_sampler = data_utils.batch_by_first_token(
+                batch_sampler,
+                dataset.first_token
+            )
 
         # return a reusable, sharded iterator
         epoch_iter = iterators.EpochBatchIterator(
