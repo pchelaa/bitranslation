@@ -565,8 +565,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 - a dictionary with any model-specific outputs
         """
 
-        
-        decoder = self.get_lang_decoder(lang_tokens)
+
+        decoder = self.get_lang_decoder(lang_tokens[0])
         if decoder is None:
             return None
 
@@ -609,7 +609,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
-        decoder = self.get_lang_decoder(lang_token)
+        decoder = self.get_lang_decoder(lang_token[0])
         if decoder is None:
             return None
 
