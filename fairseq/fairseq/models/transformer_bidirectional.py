@@ -521,6 +521,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         self.embed_tokens = embed_tokens
         self.no_encoder_attn = no_encoder_attn
         self.lang_decoders = {}
+        self.decoder = TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn)
 
     def get_lang_decoder(
         self,
@@ -566,11 +567,11 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         """
 
 
-        decoder = self.get_lang_decoder(first_tokens)
-        if decoder is None:
-            return None
+        #decoder = self.get_lang_decoder(first_tokens)
+        #if decoder is None:
+        #    return None
 
-        return decoder.forward(
+        return self.decoder.forward(
             prev_output_tokens,
             encoder_out,
             incremental_state,
@@ -609,11 +610,11 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
-        decoder = self.get_lang_decoder(first_tokens)
-        if decoder is None:
-            return None
+        #decoder = self.get_lang_decoder(first_tokens)
+        #if decoder is None:
+        #    return None
 
-        return decoder.extract_features(
+        return self.decoder.extract_features(
             prev_output_tokens,
             encoder_out,
             incremental_state,
@@ -629,13 +630,15 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         previous time step. A typical use case is beam search, where the input
         order changes between time steps based on the selection of beams.
         """
-        for decoder in self.lang_decoders.values():
-            decoder.reorder_incremental_state(incremental_state, new_order)
+        self.decoder.reorder_incremental_state(incremental_state, new_order)
+        #for decoder in self.lang_decoders.values():
+        #    decoder.reorder_incremental_state(incremental_state, new_order)
 
     def set_beam_size(self, beam_size):
         """Sets the beam size in the decoder and all children."""
-        for decoder in self.lang_decoders.values():
-            decoder.set_beam_size(beam_size)
+        self.decoder.set_beam_size(beam_size)
+        #for decoder in self.lang_decoders.values():
+        #    decoder.set_beam_size(beam_size)
 
 
 class TransformerLanguageDecoder(FairseqIncrementalDecoder):

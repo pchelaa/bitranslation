@@ -273,7 +273,7 @@ class SequenceGenerator(object):
                 encoder_outs = model.reorder_encoder_out(encoder_outs, reorder_state)
 
             decoder_output = model.forward_decoder(
-                tokens[:, :step + 1], encoder_outs, temperature=self.temperature, first_tokens=src_tokens[0]
+                tokens[:, :step + 1], encoder_outs, temperature=self.temperature, first_tokens=src_tokens[:, 0]
             )
 
             lprobs = model.get_logits(decoder_output)
