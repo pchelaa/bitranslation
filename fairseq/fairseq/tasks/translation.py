@@ -65,9 +65,7 @@ def load_langpair_dataset(
                 raise FileNotFoundError('Dataset not found: {} ({})'.format(split, data_path))
 
         src_dataset = data_utils.load_indexed_dataset(prefix + src, src_dict, dataset_impl)
-        print("TOKEN1", src_dataset[0])
-        src_dataset = EvenDataset(src_dataset, src_dict.eos())
-        print("TOKEN2", src_dataset[0])
+        #src_dataset = EvenDataset(src_dataset, src_dict.eos())
         if truncate_source:
             src_dataset = AppendTokenDataset(
                 TruncateDataset(
@@ -76,12 +74,11 @@ def load_langpair_dataset(
                 ),
                 src_dict.eos(),
             )
-        print("TOKEN3", src_dataset[0])
         src_datasets.append(src_dataset)
 
         tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, tgt_dict, dataset_impl)
         if tgt_dataset is not None:
-            tgt_dataset = EvenDataset(tgt_dataset, tgt_dict.eos())
+            #tgt_dataset = EvenDataset(tgt_dataset, tgt_dict.eos())
             tgt_datasets.append(tgt_dataset)
 
         logger.info('{} {} {}-{} {} examples'.format(
@@ -100,7 +97,6 @@ def load_langpair_dataset(
         sample_ratios = [1] * len(src_datasets)
         sample_ratios[0] = upsample_primary
         src_dataset = ConcatDataset(src_datasets, sample_ratios)
-        print("TOKEN4", src_dataset[0])
         if len(tgt_datasets) > 0:
             tgt_dataset = ConcatDataset(tgt_datasets, sample_ratios)
         else:
@@ -109,14 +105,12 @@ def load_langpair_dataset(
     if prepend_bos:
         assert hasattr(src_dict, "bos_index") and hasattr(tgt_dict, "bos_index")
         src_dataset = PrependTokenDataset(src_dataset, src_dict.bos())
-        print("TOKEN5", src_dataset[0])
         if tgt_dataset is not None:
             tgt_dataset = PrependTokenDataset(tgt_dataset, tgt_dict.bos())
 
     eos = None
     if append_source_id:
         src_dataset = AppendTokenDataset(src_dataset, src_dict.index('[{}]'.format(src)))
-        print("TOKEN6", src_dataset[0])
         if tgt_dataset is not None:
             tgt_dataset = AppendTokenDataset(tgt_dataset, tgt_dict.index('[{}]'.format(tgt)))
         eos = tgt_dict.index('[{}]'.format(tgt))
@@ -127,9 +121,8 @@ def load_langpair_dataset(
         if indexed_dataset.dataset_exists(align_path, impl=dataset_impl):
             align_dataset = data_utils.load_indexed_dataset(align_path, None, dataset_impl)
 
-    src_dataset = EvenDataset(src_dataset, src_dict.eos())
-    print("TOKEN7", src_dataset[0])
-    tgt_dataset = EvenDataset(tgt_dataset, tgt_dict.eos())
+    #src_dataset = EvenDataset(src_dataset, src_dict.eos())
+    #tgt_dataset = EvenDataset(tgt_dataset, tgt_dict.eos())
 
     tgt_dataset_sizes = tgt_dataset.sizes if tgt_dataset is not None else None
     return LanguagePairDataset(
