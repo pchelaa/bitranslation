@@ -40,7 +40,7 @@ def load_langpair_dataset(
     combine, dataset_impl, upsample_primary,
     left_pad_source, left_pad_target, max_source_positions,
     max_target_positions, prepend_bos=False, load_alignments=False,
-    truncate_source=False, append_source_id=False
+    truncate_source=False, append_source_id=False,
     even_source = 0,
     even_target = 0,
 ):
