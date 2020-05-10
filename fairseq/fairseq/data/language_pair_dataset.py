@@ -265,7 +265,7 @@ class LanguagePairDataset(FairseqDataset):
 
     def first_token(self, index):
         print(self.src[index])
-        return self.src[index][-2]
+        return self.src[index][0]
 
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when
