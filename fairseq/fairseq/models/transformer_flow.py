@@ -304,6 +304,7 @@ class TransformerEncoder(FairseqEncoder):
         self.encoder_layerdrop = args.encoder_layerdrop
 
         embed_dim = embed_tokens.embedding_dim
+        self.eos_idx = dictionary.eos()
         self.padding_idx = embed_tokens.padding_idx
         self.max_source_positions = args.max_source_positions
 
@@ -534,6 +535,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         self.embed_dim = embed_dim
         self.output_embed_dim = args.decoder_output_dim
 
+        self.eos_idx = dictionary.eos()
         self.padding_idx = embed_tokens.padding_idx
         self.max_target_positions = args.max_target_positions
 
@@ -756,12 +758,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             return (self.output_layer(x[0]), x[1], x[2]), extra
         return x, extra
 
-    def reverse_tensor(self, tensor, dim):
-        inv_idx = torch.arange(tensor.shape[dim] - 1, -1, -1, device=tensor.device).long()
-        inv_tensor = tensor.index_select(dim, inv_idx)
-
-        return inv_tensor
-
     def extract_features(
         self,
         prev_output_tokens,
@@ -827,12 +823,14 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         z, posterior_log_probs, prior_log_probs = None, None, None
 
-        src_encoded = self.reverse_tensor(encoder_out.encoder_out.transpose(0, 1), dim=1)
-        src_masks = self.reverse_tensor((encoder_out.encoder_padding_mask == 0).float(), dim=1)
+        src_encoded = encoder_out.encoder_out.transpose(0, 1)
+        src_masks = (encoder_out.encoder_padding_mask == 0).float()
 
         if self.training:
-            tgt_sents = self.reverse_tensor(prev_output_tokens, dim=1)
-            tgt_masks = self.reverse_tensor((prev_output_tokens.eq(self.padding_idx) == 0).float(), dim=1)
+            tgt_sents = torch.zeros_like(prev_output_tokens, device=prev_output_tokens.device)
+            tgt_sents[:, :-1] = prev_output_tokens[:, 1:]
+            tgt_sents[:, -1] = prev_output_tokens[:, 0]
+            tgt_masks = (prev_output_tokens.eq(self.eos_idx) == 0).float()
 
             z, posterior_log_probs = self.posterior.sample(
                 tgt_sents,
