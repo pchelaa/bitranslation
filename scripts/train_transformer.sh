@@ -20,6 +20,13 @@ valid_subset=test
 device_id=0
 criterion=label_smoothed_cross_entropy
 arch=transformer
+embed_dim=512
+ffn_embed_dim=2048
+even_source=0
+even_target=0
+group_by_first_token=0
+max_source_positions=1024
+max_target_positions=1024
 
 ##############################################################################################################
 
@@ -34,16 +41,23 @@ Options:\n
   --run-tensorboard\t\tRun tensorboard (default=$run_tensorboard).\n
   --tensorboard-port\t\tTensorboard port (default=$tensorboard_port).\n
   --max-tokens\t\t\tMax tokens (default=$max_tokens).\n
-  --kl-init-steps\t\t\tKL init steps (default=$kl_init_steps).\n
-  --kl-warmup-steps\t\t\tKL warmup steps (default=$kl_warmup_steps).\n
-  --save-interval\t\t\tSave interval (default=$save_interval).\n
+  --kl-init-steps\t\tKL init steps (default=$kl_init_steps).\n
+  --kl-warmup-steps\t\tKL warmup steps (default=$kl_warmup_steps).\n
+  --save-interval\t\tSave interval (default=$save_interval).\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language (default=$target_lang).\n
   --valid-subset\t\t\tValid subset (default=$valid_subset).\n
   --device-id\t\t\tCuda device ID (default=$device_id).\n
   --criterion\t\t\tCriterion (default=$criterion).\n
-  --arch\t\t\tAcrchitecture (default=$arch).\n
+  --arch\t\t\t\tAcrchitecture (default=$arch).\n
   --model\t\t\tModel name.\n
+  --embed-dim\t\t\tEmbedding dimension (default=$embed_dim).\n
+  --ffn-embed-dim\t\tFfn embedding dimension (default=$ffn_embed_dim).\n
+  --even-source\t\t\tMake number of tokens even for source dataset (default=$even_source).\n
+  --even-target\t\t\tMake number of tokens even for target dataset (default=$even_target).\n
+  --group-by-first-token\t\tGroup batch by first token (default=$group_by_first_token).\n
+  --max-source-positions\t\tMax source positions (default=$max_source_positions).\n
+  --max-target-positions\t\tMax target positions (default=$max_target_positions).\n
 ";
 
 ##############################################################################################################
@@ -87,6 +101,20 @@ while [ $# -gt 0 ]; do
             shift; arch="$1"; shift ;;
         --model)
             shift; model="$1"; shift ;;
+        --embed-dim)
+            shift; embed_dim="$1"; shift ;;
+        --ffn-embed-dim)
+            shift; ffn_embed_dim="$1"; shift ;;
+        --even-source)
+            shift; even_source="$1"; shift ;;
+        --even-target)
+            shift; even_target="$1"; shift ;;
+        --group-by-first-token)
+            shift; group_by_first_token="$1"; shift ;;
+        --max-source-positions)
+            shift; max_source_positions="$1"; shift ;;
+        --max-target-positions)
+            shift; max_target_positions="$1"; shift ;;
         -*)  echo "Unknown argument: $1, exiting"; echo -e $usage; exit 1 ;;
         *)   break ;;   # end of options: interpreted as num-leaves
     esac
@@ -219,8 +247,8 @@ export CUDA_VISIBLE_DEVICES=$device_id
     --share-decoder-input-output-embed \
     --max-tokens $max_tokens \
     --attention-dropout 0.1 \
-    --encoder-embed-dim  256 --decoder-embed-dim 256 \
-    --encoder-ffn-embed-dim 2048 --decoder-ffn-embed-dim 1024 \
+    --encoder-embed-dim  $embed_dim --decoder-embed-dim $embed_dim \
+    --encoder-ffn-embed-dim $ffn_embed_dim --decoder-ffn-embed-dim $ffn_embed_dim \
     --label-smoothing 0.1 \
     --layernorm-embedding \
     --encoder-normalize-before --decoder-normalize-before \
@@ -245,6 +273,11 @@ export CUDA_VISIBLE_DEVICES=$device_id
     --valid-subset $valid_subset \
     --kl-init-steps $kl_init_steps \
     --kl-warmup-steps $kl_warmup_steps \
+    --even_source $even_source \
+    --even_target $even_target \
+    --group-by-first-token $group_by_first_token \
+    --max-source-positions $max_source_positions \
+    --max_target_positions $max_target_positions \
     --ddp-backend=no_c10d \
     --skip-invalid-size-inputs-valid-test \
     --reset-optimizer
