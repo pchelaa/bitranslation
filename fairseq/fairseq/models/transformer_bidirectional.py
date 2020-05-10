@@ -518,7 +518,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
     def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False):
         super().__init__(dictionary)
         self.args = args
-        serlf.embed_tokens = embed_tokens
+        self.embed_tokens = embed_tokens
         self.no_encoder_attn = no_encoder_attn
         self.lang_decoders = {}
 
