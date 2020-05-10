@@ -181,6 +181,8 @@ class FairseqTask(object):
             required_batch_size_multiple=required_batch_size_multiple,
         )
 
+        print(batch_sampler)
+
         new_batch_sampler = []
         for batch in batch_sampler:
             batches = {}
