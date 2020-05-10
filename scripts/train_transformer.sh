@@ -10,11 +10,13 @@ merge_dataset=false
 clean_checkpoints=false
 run_tensorboard=false
 tensorboard_port=6006
-max_tokens=4096
+max_tokens=2048
+kl_init_steps=15000
+kl_warmup_steps=5000
 save_interval=5
 source_lang=en
 target_lang=fr
-valid_subset=valid,test
+valid_subset=test
 device_id=0
 criterion=label_smoothed_cross_entropy
 arch=transformer
@@ -32,6 +34,8 @@ Options:\n
   --run-tensorboard\t\tRun tensorboard (default=$run_tensorboard).\n
   --tensorboard-port\t\tTensorboard port (default=$tensorboard_port).\n
   --max-tokens\t\t\tMax tokens (default=$max_tokens).\n
+  --kl-init-steps\t\t\tKL init steps (default=$kl_init_steps).\n
+  --kl-warmup-steps\t\t\tKL warmup steps (default=$kl_warmup_steps).\n
   --save-interval\t\t\tSave interval (default=$save_interval).\n
   --source-lang\t\t\tSource language (default=$source_lang).\n
   --target-lang\t\t\tTarget language (default=$target_lang).\n
@@ -39,6 +43,7 @@ Options:\n
   --device-id\t\t\tCuda device ID (default=$device_id).\n
   --criterion\t\t\tCriterion (default=$criterion).\n
   --arch\t\t\tAcrchitecture (default=$arch).\n
+  --model\t\t\tModel name.\n
 ";
 
 ##############################################################################################################
@@ -62,6 +67,10 @@ while [ $# -gt 0 ]; do
             shift; tensorboard_port="$1"; shift ;;
         --max-tokens)
             shift; max_tokens="$1"; shift ;;
+        --kl-init-steps)
+            shift; kl_init_steps="$1"; shift ;;
+        --kl-warmup-steps)
+            shift; kl_warmup_steps="$1"; shift ;;
         --save-interval)
             shift; save_interval="$1"; shift ;;
         --source-lang)
@@ -76,6 +85,8 @@ while [ $# -gt 0 ]; do
             shift; criterion="$1"; shift ;;
         --arch)
             shift; arch="$1"; shift ;;
+        --model)
+            shift; model="$1"; shift ;;
         -*)  echo "Unknown argument: $1, exiting"; echo -e $usage; exit 1 ;;
         *)   break ;;   # end of options: interpreted as num-leaves
     esac
@@ -115,6 +126,10 @@ fi
 
 if [ ! -d "$checkpoints_dir/$dataset"  ]; then
     mkdir $checkpoints_dir/$dataset
+fi
+
+if [ -z "$model" ]; then
+    model=$dataset
 fi
 
 ##############################################################################################################
@@ -199,13 +214,13 @@ echo -e "$(date +"%D %T") Training transformer\n"
 
 export CUDA_VISIBLE_DEVICES=$device_id
 
-fairseq-train $dataset_dir \
-    --arch transformer \
+/data/anjukirkov/courses/bt/fairseq/fairseq_cli/train.py $dataset_dir \
+    --arch $arch \
     --share-decoder-input-output-embed \
     --max-tokens $max_tokens \
     --attention-dropout 0.1 \
-    --encoder-embed-dim  512 --decoder-embed-dim 512 \
-    --encoder-ffn-embed-dim 2048 --decoder-ffn-embed-dim 2048 \
+    --encoder-embed-dim  256 --decoder-embed-dim 256 \
+    --encoder-ffn-embed-dim 2048 --decoder-ffn-embed-dim 1024 \
     --label-smoothing 0.1 \
     --layernorm-embedding \
     --encoder-normalize-before --decoder-normalize-before \
@@ -220,14 +235,18 @@ fairseq-train $dataset_dir \
     --eval-bleu-remove-bpe \
     --best-checkpoint-metric bleu \
     --maximize-best-checkpoint-metric \
-    --save-dir $checkpoints_dir/$dataset \
+    --save-dir $checkpoints_dir/$model \
     --save-interval $save_interval \
-    --tensorboard-logdir $logs_dir/$dataset \
+    --tensorboard-logdir $logs_dir/$model \
     --lr 5e-4 \
     --lr-scheduler inverse_sqrt \
     --weight-decay 0.0001 \
-    --criterion label_smoothed_cross_entropy \
+    --criterion $criterion \
     --valid-subset $valid_subset \
-    --fp16
+    --kl-init-steps $kl_init_steps \
+    --kl-warmup-steps $kl_warmup_steps \
+    --ddp-backend=no_c10d \
+    --skip-invalid-size-inputs-valid-test \
+    --reset-optimizer
 
 ##############################################################################################################
