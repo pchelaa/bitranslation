@@ -546,7 +546,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         alignment_heads: Optional[int] = None,
         src_lengths: Optional[Any] = None,
         return_all_hiddens: bool = False,
-        lang_token: Optional[Any] = None
+        lang_tokens: Optional[Any] = None
     ):
         """
         Args:
@@ -565,7 +565,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 - a dictionary with any model-specific outputs
         """
 
-        decoder = self.get_lang_decoder(lang_token)
+        
+        decoder = self.get_lang_decoder(lang_tokens)
         if decoder is None:
             return None
 
