@@ -58,6 +58,7 @@ Options:\n
   --group-by-first-token\t\tGroup batch by first token (default=$group_by_first_token).\n
   --max-source-positions\t\tMax source positions (default=$max_source_positions).\n
   --max-target-positions\t\tMax target positions (default=$max_target_positions).\n
+  --preset\t\t\tSettings preset (optionally).\n
 ";
 
 ##############################################################################################################
@@ -115,10 +116,62 @@ while [ $# -gt 0 ]; do
             shift; max_source_positions="$1"; shift ;;
         --max-target-positions)
             shift; max_target_positions="$1"; shift ;;
+        --preset)
+            shift; preset="$1"; shift ;;
         -*)  echo "Unknown argument: $1, exiting"; echo -e $usage; exit 1 ;;
         *)   break ;;   # end of options: interpreted as num-leaves
     esac
 done
+
+##############################################################################################################
+
+if [ $preset == "base" ]; then
+    arch=transformer
+    criterion=label_smoothed_cross_entropy
+    valid_subset=test
+    embed_dim=256
+    ffn_embed_dim=1024
+    max_tokens=1536
+    kl_init_steps=1500
+    kl_warmup_steps=5000
+    even_source=0
+    even_target=0
+    group_by_first_token=0
+    max_source_poisitions=256
+    max_target_positions=256
+fi
+
+if [ $preset == "flow" ]; then
+    arch=transformer_with_flow
+    criterion=label_smoothed_cross_entropy_with_kl
+    valid_subset=test
+    embed_dim=256
+    ffn_embed_dim=1024
+    max_tokens=1536
+    kl_init_steps=15000
+    kl_warmup_steps=5000
+    even_source=1
+    even_target=1
+    group_by_first_token=0
+    max_source_positions=256
+    max_target_positions=256
+fi
+
+if [ $preset == "bidirectional" ]; then
+    arch=transformer_bidirectional
+    criterion=label_smoothed_cross_entropy
+    valid_subset=en-fr,fr-en
+    embed_dim=512
+    ffn_embed_dim=2048
+    max_tokens=4096
+    kl_init_steps=0
+    kl_warmup_steps=0
+    even_source=0
+    even_target=0
+    group_by_first_token=1
+    max_source_poisitions=1024
+    max_target_positions=1024
+fi
 
 ##############################################################################################################
 
@@ -273,11 +326,11 @@ export CUDA_VISIBLE_DEVICES=$device_id
     --valid-subset $valid_subset \
     --kl-init-steps $kl_init_steps \
     --kl-warmup-steps $kl_warmup_steps \
-    --even_source $even_source \
-    --even_target $even_target \
+    --even-source $even_source \
+    --even-target $even_target \
     --group-by-first-token $group_by_first_token \
     --max-source-positions $max_source_positions \
-    --max_target_positions $max_target_positions \
+    --max-target-positions $max_target_positions \
     --ddp-backend=no_c10d \
     --skip-invalid-size-inputs-valid-test \
     --reset-optimizer
