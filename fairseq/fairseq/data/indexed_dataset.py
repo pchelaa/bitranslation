@@ -277,6 +277,9 @@ class IndexedRawTextDataset(FairseqDataset):
     def size(self, index):
         return self.sizes[index]
 
+    def tokens(self, index):
+        return self.tokens_list[index]
+
     @staticmethod
     def exists(path):
         return os.path.exists(path)

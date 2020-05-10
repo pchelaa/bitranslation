@@ -40,6 +40,11 @@ class FairseqDataset(torch.utils.data.Dataset, EpochListening):
         enforce ``--max-tokens`` during batching."""
         raise NotImplementedError
 
+    def tokens(self, index):
+        """Return the number of tokens in a sample. This value is used to
+        enforce ``--max-tokens`` during batching."""
+        raise NotImplementedError
+
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when
         filtering a dataset with ``--max-positions``."""

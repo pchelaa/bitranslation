@@ -26,7 +26,7 @@ cdef _is_batch_full(list batch, long num_tokens, long max_tokens, long max_sente
 @cython.cdivision(True)
 cpdef list batch_by_size_fast(
     np.ndarray[DTYPE_t, ndim=1] indices,
-    num_tokens_fn,
+    dataset,
     long max_tokens,
     long max_sentences,
     int bsz_mult,
@@ -41,9 +41,11 @@ cpdef list batch_by_size_fast(
     cdef long num_tokens
     cdef DTYPE_t[:] indices_view = indices
 
+    prev_first_token = None
     for i in range(len(indices_view)):
         idx = indices_view[i]
-        num_tokens = num_tokens_fn(idx)
+        first_token = dataset.tokens()[0]
+        num_tokens = dataset.num_tokens(idx)
         sample_lens.append(num_tokens)
         sample_len = max(sample_len, num_tokens)
 
@@ -53,7 +55,7 @@ cpdef list batch_by_size_fast(
         )
         num_tokens = (len(batch) + 1) * sample_len
 
-        if _is_batch_full(batch, num_tokens, max_tokens, max_sentences):
+        if (prev_first_token not is None and prev_first_token != first_token) or _is_batch_full(batch, num_tokens, max_tokens, max_sentences):
             mod_len = max(
                 bsz_mult * (len(batch) // bsz_mult),
                 len(batch) % bsz_mult,
@@ -62,6 +64,7 @@ cpdef list batch_by_size_fast(
             batch = batch[mod_len:]
             sample_lens = sample_lens[mod_len:]
             sample_len = max(sample_lens) if len(sample_lens) > 0 else 0
+        prev_first_token = first_token
         batch.append(idx)
     if len(batch) > 0:
         batches.append(batch)
