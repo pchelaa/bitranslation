@@ -190,7 +190,7 @@ class FairseqTask(object):
                     batches[first_token] = []
                 batches[first_token].append(idx)
             for b in batches.values():
-                new_batches_sampler.append(b)
+                new_batch_sampler.append(b)
 
         # return a reusable, sharded iterator
         epoch_iter = iterators.EpochBatchIterator(
