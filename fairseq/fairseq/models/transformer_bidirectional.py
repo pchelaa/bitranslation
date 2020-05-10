@@ -280,7 +280,7 @@ class TransformerBidirectionalModel(FairseqEncoderDecoderModel):
             alignment_heads=alignment_heads,
             src_lengths=src_lengths,
             return_all_hiddens=return_all_hiddens,
-            first_tokens=src_tokens[0]
+            first_tokens=src_tokens[:, 0]
         )
 
         return decoder_out
@@ -527,7 +527,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         first_tokens: Optional[Any] = None
     ):
         print(first_tokens)
-        
+
         key = first_tokens[0].item()
         if key in self.lang_decoders.keys():
             return self.lang_decoders[key]
