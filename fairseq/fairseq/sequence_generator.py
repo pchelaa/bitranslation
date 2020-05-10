@@ -612,14 +612,18 @@ class EnsembleModel(torch.nn.Module):
         net_output
     ):
         """Get logits from a net's output."""
-        return self.models[-1].get_logits(net_output)
+        if net_output is None:
+            return None
+        return net_output[0]
 
     def get_avg_attn_scores(
         self,
         net_output
     ):
-        """Get prior average attn scores from a net's output."""
-        return self.models[-1].get_avg_attn_scores(net_output)
+        """Get average attn scores from a net's output."""
+        if net_output is None:
+            return None
+        return net_output[1]
 
     def update_logits(
         self,
@@ -627,7 +631,7 @@ class EnsembleModel(torch.nn.Module):
         logits
     ):
         """Set logits to a net's output."""
-        self.models[-1].update_logits(net_output, logits)
+        return (logits, net_output[1])
 
 
 class SequenceGeneratorWithAlignment(SequenceGenerator):
