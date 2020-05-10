@@ -181,8 +181,6 @@ class FairseqTask(object):
             required_batch_size_multiple=required_batch_size_multiple,
         )
 
-        print(batch_sampler)
-
         new_batch_sampler = []
         for batch in batch_sampler:
             batches = {}
@@ -193,6 +191,8 @@ class FairseqTask(object):
                 batches[first_token].append(idx)
             for b in batches.values():
                 new_batch_sampler.append(b)
+
+        print(new_batch_sampler)
 
         # return a reusable, sharded iterator
         epoch_iter = iterators.EpochBatchIterator(
