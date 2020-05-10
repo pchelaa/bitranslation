@@ -532,8 +532,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         if not self.training:
             return None
 
-        print("NUMBER OF DECODERS", len(self.lang_decoders))
-
         decoder = TransformerLanguageDecoder(self.args, self.dictionary, self.embed_tokens, self.no_encoder_attn).to(first_tokens.device)
         self.lang_decoders[key] = decoder
         return decoder
