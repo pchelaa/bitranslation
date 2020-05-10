@@ -18,6 +18,7 @@ class EvenDataset(BaseWrapperDataset):
 
     def __getitem__(self, idx):
         item = self.dataset[idx]
+        print(self.dataset[idx])
         while len(item) % 4 != 0:
             item = torch.cat([item.new([self.token]), item])
         return item
