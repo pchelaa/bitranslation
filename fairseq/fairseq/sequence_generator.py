@@ -262,6 +262,7 @@ class SequenceGenerator(object):
 
         reorder_state = None
         batch_idxs = None
+        first_tokens = src_tokens[:, 0]
         for step in range(max_len + 1):  # one extra step for EOS marker
             # reorder decoder internal states based on the prev choice of beams
             if reorder_state is not None:
@@ -273,7 +274,6 @@ class SequenceGenerator(object):
                 encoder_outs = model.reorder_encoder_out(encoder_outs, reorder_state)
 
             print("SRC_TOKENS_SHAPE", src_tokens.shape)
-            first_tokens=src_tokens[:, 0]
             print("FIRST_TOKENS", first_tokens)
             decoder_output = model.forward_decoder(
                 tokens[:, :step + 1], encoder_outs, temperature=self.temperature, first_tokens=first_tokens
