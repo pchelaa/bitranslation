@@ -227,6 +227,7 @@ class TransformerBidirectionalModel(FairseqEncoderDecoderModel):
             )
 
         lang_tokens=[str(src_dict.index(token)) for token in args.lang_tokens.split(",")]
+        print("Special language tokens: {}, indices: {}".format(args.lang_tokens, ",".join(lang_tokens)))
 
         encoder = cls.build_encoder(args, src_dict, encoder_embed_tokens)
         decoder = cls.build_decoder(args, tgt_dict, decoder_embed_tokens, lang_tokens)
