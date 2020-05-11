@@ -517,7 +517,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
     def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False):
         super().__init__(dictionary)
-        self.lang_tokens=[9, 10]
+        self.lang_tokens=["9", "10"]
         self.lang_decoders = nn.ModuleDict(
             {
                 token: TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn)
@@ -554,7 +554,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 - a dictionary with any model-specific outputs
         """
 
-        lang_token = first_tokens[0].item()
+        lang_token = str(first_tokens[0].item())
         return self.lang_decoders[lang_token].forward(
             prev_output_tokens,
             encoder_out,
@@ -594,7 +594,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
-        lang_token = first_tokens[0].item()
+        lang_token = str(first_tokens[0].item())
         return self.lang_decoders[lang_token].extract_features(
             prev_output_tokens,
             encoder_out,
