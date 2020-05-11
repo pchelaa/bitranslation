@@ -27,6 +27,7 @@ even_target=0
 group_by_first_token=0
 max_source_positions=1024
 max_target_positions=1024
+lang_tokens="@@@@,^^^^"
 
 ##############################################################################################################
 
@@ -58,6 +59,7 @@ Options:\n
   --group-by-first-token\t\tGroup batch by first token (default=$group_by_first_token).\n
   --max-source-positions\t\tMax source positions (default=$max_source_positions).\n
   --max-target-positions\t\tMax target positions (default=$max_target_positions).\n
+  --lang-tokens\t\t\tComma separated special language tokens (default=$lang_tokens).\n
   --preset\t\t\tSettings preset (optionally).\n
 ";
 
@@ -116,6 +118,8 @@ while [ $# -gt 0 ]; do
             shift; max_source_positions="$1"; shift ;;
         --max-target-positions)
             shift; max_target_positions="$1"; shift ;;
+        --lang-tokens)
+            shift; lang_tokens="$1"; shift ;;
         --preset)
             shift; preset="$1"; shift ;;
         -*)  echo "Unknown argument: $1, exiting"; echo -e $usage; exit 1 ;;
@@ -331,6 +335,7 @@ export CUDA_VISIBLE_DEVICES=$device_id
     --group-by-first-token $group_by_first_token \
     --max-source-positions $max_source_positions \
     --max-target-positions $max_target_positions \
+    --lang-tokens $lang_tokens \
     --ddp-backend=no_c10d \
     --skip-invalid-size-inputs-valid-test \
     --reset-optimizer
