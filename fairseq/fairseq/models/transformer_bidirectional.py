@@ -167,6 +167,8 @@ class TransformerBidirectionalModel(FairseqEncoderDecoderModel):
                             help='number of iterations before calculating kl')
         parser.add_argument('--kl-warmup-steps', default=10000, type=int, metavar='N',
                             help='number of iterations of kl warmup')
+        parser.add_argument('--lang-tokens', type=str, metavar='STR',
+                            help='Comma-separated special language tokens')
         # fmt: on
 
     @classmethod
@@ -224,8 +226,10 @@ class TransformerBidirectionalModel(FairseqEncoderDecoderModel):
                 tgt_dict, args.decoder_embed_dim, args.decoder_embed_path
             )
 
+        lang_tokens=[str(src_dict.index(token)) for token in args.lang_tokens.split(",")]
+
         encoder = cls.build_encoder(args, src_dict, encoder_embed_tokens)
-        decoder = cls.build_decoder(args, tgt_dict, decoder_embed_tokens)
+        decoder = cls.build_decoder(args, tgt_dict, decoder_embed_tokens, lang_tokens)
 
         return cls(args, encoder, decoder)
 
@@ -237,11 +241,12 @@ class TransformerBidirectionalModel(FairseqEncoderDecoderModel):
             embed_tokens)
 
     @classmethod
-    def build_decoder(cls, args, tgt_dict, embed_tokens):
+    def build_decoder(cls, args, tgt_dict, embed_tokens, lang_tokens):
         return TransformerDecoder(
             args,
             tgt_dict,
             embed_tokens,
+            lang_tokens,
             no_encoder_attn=getattr(args, "no_cross_attention", False),
         )
 
@@ -515,13 +520,13 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             (default: False).
     """
 
-    def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False):
+    def __init__(self, args, dictionary, embed_tokens, lang_tokens, no_encoder_attn=False):
         super().__init__(dictionary)
-        self.lang_tokens=["9", "10"]
+        self.lang_tokens=lang_tokens
         self.lang_decoders = nn.ModuleDict(
             {
-                token: TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn)
-                for token in self.lang_tokens
+                lang_token: TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn)
+                for lang_token in self.lang_tokens
             }
         )
 
@@ -611,15 +616,15 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         previous time step. A typical use case is beam search, where the input
         order changes between time steps based on the selection of beams.
         """
+        super().reorder_incremental_state(incremental_state, new_order)
         for lang_token in self.lang_tokens:
             self.lang_decoders[lang_token].reorder_incremental_state(incremental_state, new_order)
-        super().reorder_incremental_state(incremental_state, new_order)
 
     def set_beam_size(self, beam_size):
         """Sets the beam size in the decoder and all children."""
+        super().set_beam_size(beam_size)
         for lang_token in self.lang_tokens:
             self.lang_decoders[lang_token].set_beam_size(beam_size)
-        super().set_beam_size(beam_size)
 
 
 class TransformerLanguageDecoder(FairseqIncrementalDecoder):

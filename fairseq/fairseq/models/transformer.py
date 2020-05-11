@@ -166,6 +166,8 @@ class TransformerModel(FairseqEncoderDecoderModel):
                             help='number of iterations before calculating kl')
         parser.add_argument('--kl-warmup-steps', default=10000, type=int, metavar='N',
                             help='number of iterations of kl warmup')
+        parser.add_argument('--lang-tokens', type=str, metavar='STR',
+                            help='Comma-separated special language tokens')
         # fmt: on
 
     @classmethod

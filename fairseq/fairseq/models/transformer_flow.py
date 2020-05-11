@@ -167,6 +167,8 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
                             help='if True, dont scale embeddings')
         parser.add_argument('--kl-init-steps', default=30000, type=int, metavar='N',
                             help='number of iterations before calculating kl')
+        parser.add_argument('--lang-tokens', type=str, metavar='STR',
+                            help='Comma-separated special language tokens')
         # fmt: on
 
     @classmethod
