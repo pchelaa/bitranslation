@@ -517,19 +517,21 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
     def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False):
         super().__init__(dictionary)
-        self.lang_decoders = []
-        for _ in range(2):
-            self.lang_decoders.append(TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn))
-        self.lang_token_indices = {}
+        self.forward_decoder = TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn)
+        self.backward_decoder = TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn)
+        self.forward_token_idx = 9
+        self.backward_token_idx = 10
 
     def get_lang_decoder(
         self,
         first_tokens: Optional[Any] = None
     ):
         key = first_tokens[0].item()
-        if key not in self.lang_token_indices.keys():
-            self.lang_token_indices[key] = len(self.lang_token_indices)
-        return self.lang_decoders[self.lang_token_indices[key]]
+        if key == self.forward_token_idx:
+            return self.forward_decoder
+        if key == self.backward_token_idx:
+            return self.backward_decoder
+        return None
 
     def forward(
         self,
@@ -624,14 +626,14 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         previous time step. A typical use case is beam search, where the input
         order changes between time steps based on the selection of beams.
         """
-        for decoder in self.lang_decoders:
-            decoder.reorder_incremental_state(incremental_state, new_order)
+        self.forward_decoder.reorder_incremental_state(incremental_state, new_order)
+        self.backward_decoder.reorder_incremental_state(incremental_state, new_order)
         super().reorder_incremental_state(incremental_state, new_order)
 
     def set_beam_size(self, beam_size):
         """Sets the beam size in the decoder and all children."""
-        for decoder in self.lang_decoders:
-            decoder.set_beam_size(beam_size)
+        self.forward_decoder.set_beam_size(beam_size)
+        self.backward_decoder.set_beam_size(beam_size)
         super().set_beam_size(beam_size)
 
 
