@@ -517,23 +517,13 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
     def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False):
         super().__init__(dictionary)
-        self.forward_decoder = TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn)
-        self.backward_decoder = TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn)
-        self.forward_token_idx = 9
-        self.backward_token_idx = 10
-
-    def get_lang_decoder(
-        self,
-        first_tokens: Optional[Any] = None
-    ):
-        if not self.training:
-            print("FIRST_TOKENS", first_tokens)
-        key = first_tokens[0].item()
-        if key == self.forward_token_idx:
-            return self.forward_decoder
-        if key == self.backward_token_idx:
-            return self.backward_decoder
-        return None
+        self.lang_tokens=[9, 10]
+        self.lang_decoders = nn.ModuleDict(
+            {
+                token: TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn)
+                for token in self.lang_tokens
+            }
+        )
 
     def forward(
         self,
@@ -564,12 +554,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 - a dictionary with any model-specific outputs
         """
 
-
-        decoder = self.get_lang_decoder(first_tokens)
-        if decoder is None:
-            return None
-
-        return decoder.forward(
+        lang_token = first_tokens[0].item()
+        return self.lang_decoders[lang_token].forward(
             prev_output_tokens,
             encoder_out,
             incremental_state,
@@ -608,11 +594,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 - the decoder's features of shape `(batch, tgt_len, embed_dim)`
                 - a dictionary with any model-specific outputs
         """
-        decoder = self.get_lang_decoder(first_tokens)
-        if decoder is None:
-            return None
-
-        return decoder.extract_features(
+        lang_token = first_tokens[0].item()
+        return self.lang_decoders[lang_token].extract_features(
             prev_output_tokens,
             encoder_out,
             incremental_state,
@@ -628,14 +611,14 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         previous time step. A typical use case is beam search, where the input
         order changes between time steps based on the selection of beams.
         """
-        self.forward_decoder.reorder_incremental_state(incremental_state, new_order)
-        self.backward_decoder.reorder_incremental_state(incremental_state, new_order)
+        for lang_token in self.lang_tokens:
+            self.lang_decoders[lang_token].reorder_incremental_state(incremental_state, new_order)
         super().reorder_incremental_state(incremental_state, new_order)
 
     def set_beam_size(self, beam_size):
         """Sets the beam size in the decoder and all children."""
-        self.forward_decoder.set_beam_size(beam_size)
-        self.backward_decoder.set_beam_size(beam_size)
+        for lang_token in self.lang_tokens:
+            self.lang_decoders[lang_token].set_beam_size(beam_size)
         super().set_beam_size(beam_size)
 
 
