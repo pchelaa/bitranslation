@@ -521,7 +521,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         self.embed_tokens = embed_tokens
         self.no_encoder_attn = no_encoder_attn
         self.lang_decoders = {}
-        self.decoder = TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn)
 
     def get_lang_decoder(
         self,
