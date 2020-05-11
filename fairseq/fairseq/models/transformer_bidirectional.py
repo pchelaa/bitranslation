@@ -623,23 +623,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             alignment_heads,
         )
 
-    def reorder_incremental_state(self, incremental_state, new_order):
-        """Reorder incremental state.
-
-        This should be called when the order of the input has changed from the
-        previous time step. A typical use case is beam search, where the input
-        order changes between time steps based on the selection of beams.
-        """
-        self.decoder.reorder_incremental_state(incremental_state, new_order)
-        #for decoder in self.lang_decoders.values():
-        #    decoder.reorder_incremental_state(incremental_state, new_order)
-
-    def set_beam_size(self, beam_size):
-        """Sets the beam size in the decoder and all children."""
-        self.decoder.set_beam_size(beam_size)
-        #for decoder in self.lang_decoders.values():
-        #    decoder.set_beam_size(beam_size)
-
 
 class TransformerLanguageDecoder(FairseqIncrementalDecoder):
     """
