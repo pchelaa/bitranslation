@@ -879,7 +879,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             )
 
         if self.prior.flow.single_z:
-            x += z_.transpose(0, 1).repeat(x.size(0), 1, 1)
+            x = torch.cat([z_.transpose(0, 1), x], dim=0)
         else:
             z = torch.max(z, dim=1)[0].unsqueeze(1).transpose(0, 1)
             x = torch.cat([z, x], dim=0)
