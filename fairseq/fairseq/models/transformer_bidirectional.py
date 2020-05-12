@@ -617,13 +617,11 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         previous time step. A typical use case is beam search, where the input
         order changes between time steps based on the selection of beams.
         """
-        super().reorder_incremental_state(incremental_state, new_order)
         for lang_token in self.lang_tokens:
             self.lang_decoders[lang_token].reorder_incremental_state(incremental_state, new_order)
 
     def set_beam_size(self, beam_size):
         """Sets the beam size in the decoder and all children."""
-        super().set_beam_size(beam_size)
         for lang_token in self.lang_tokens:
             self.lang_decoders[lang_token].set_beam_size(beam_size)
 
