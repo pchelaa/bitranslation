@@ -633,7 +633,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
               "max_length": args.max_target_positions,
               "dropout": 0.0,
               "inverse": True,
-              "single_z": True
+              "single_z": False
             }
           }
         max_src_length = args.max_source_positions
