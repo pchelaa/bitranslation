@@ -432,21 +432,28 @@ class NMTFlow(Flow):
     """
 
     def __init__(self, levels, num_steps, features, src_features, factors, hidden_features=None, inverse=False,
-                 transform='affine', coupling_type='conv', kernel_size=3, rnn_mode='LSTM', heads=1, pos_enc='add', max_length=100, dropout=0.0):
+                 transform='affine', coupling_type='conv', kernel_size=3, rnn_mode='LSTM', heads=1, pos_enc='add',
+                 max_length=100, dropout=0.0, single_z=False):
         super(NMTFlow, self).__init__(inverse)
         assert levels == len(num_steps)
-        assert levels == len(factors) + 1
+        if not single_z:
+            assert levels == len(factors) + 1
         blocks = []
         self.levels = levels
         self.features = features
         pos_attn = coupling_type == 'self_attn' and pos_enc == 'attn'
+        self.single_z = single_z
 
         for level in range(levels):
-            if level == levels - 1:
+            if (level == levels - 1) or (self.single_z):
+                if not self.single_z:
+                    factor = 2
+                else:
+                    factor = None
                 block = NMTFlowBlock(num_steps[level], features, src_features, hidden_features=hidden_features,
-                                     inverse=inverse, prior=False, coupling_type=coupling_type, transform=transform,
-                                     kernel_size=kernel_size, rnn_mode=rnn_mode, heads=heads, max_length=max_length,
-                                     dropout=dropout, pos_attn=pos_attn)
+                                     inverse=inverse, prior=False, factor=factor, coupling_type=coupling_type,
+                                     transform=transform, kernel_size=kernel_size, rnn_mode=rnn_mode, heads=heads,
+                                     max_length=max_length, dropout=dropout, pos_attn=pos_attn)
             else:
                 factor = factors[level]
                 block = NMTFlowBlock(num_steps[level], features, src_features, hidden_features=hidden_features,
@@ -470,15 +477,17 @@ class NMTFlow(Flow):
         for i, block in enumerate(self.blocks):
             out, logdet = block.forward(out, tgt_mask, src, src_mask)
             logdet_accum = logdet_accum + logdet
-            if i < self.levels - 1:
-                out1, out2 = split(out, block.z_features)
-                outputs.append(out2)
-                out, tgt_mask = squeeze(out1, tgt_mask)
+            if not self.single_z:
+                if i < self.levels - 1:
+                    out1, out2 = split(out, block.z_features)
+                    outputs.append(out2)
+                    out, tgt_mask = squeeze(out1, tgt_mask)
 
-        for _ in range(self.levels - 1):
-            out2 = outputs.pop()
-            out = unsqueeze(out)
-            out = unsplit([out, out2])
+        if not self.single_z:
+            for _ in range(self.levels - 1):
+                out2 = outputs.pop()
+                out = unsqueeze(out)
+                out = unsplit([out, out2])
         assert len(outputs) == 0
         return out, logdet_accum
 
@@ -488,19 +497,21 @@ class NMTFlow(Flow):
         outputs = []
         masks = []
         out = input
-        for i in range(self.levels - 1):
-            out1, out2 = split(out, self.blocks[i].z_features)
-            outputs.append(out2)
-            masks.append(tgt_mask)
-            out, tgt_mask = squeeze(out1, tgt_mask)
+        if not self.single_z:
+            for i in range(self.levels - 1):
+                out1, out2 = split(out, self.blocks[i].z_features)
+                outputs.append(out2)
+                masks.append(tgt_mask)
+                out, tgt_mask = squeeze(out1, tgt_mask)
 
         logdet_accum = input.new_zeros(input.size(0))
         for i, block in enumerate(reversed(self.blocks)):
-            if i > 0:
-                out2 = outputs.pop()
-                tgt_mask = masks.pop()
-                out1 = unsqueeze(out)
-                out = unsplit([out1, out2])
+            if not self.single_z:
+                if i > 0:
+                    out2 = outputs.pop()
+                    tgt_mask = masks.pop()
+                    out1 = unsqueeze(out)
+                    out = unsplit([out1, out2])
             out, logdet = block.backward(out, tgt_mask, src, src_mask)
             logdet_accum = logdet_accum + logdet
         assert len(outputs) == 0
@@ -517,15 +528,17 @@ class NMTFlow(Flow):
         for i, block in enumerate(self.blocks):
             out, logdet = block.init(out, tgt_mask, src, src_mask, init_scale=init_scale)
             logdet_accum = logdet_accum + logdet
-            if i < self.levels - 1:
-                out1, out2 = split(out, block.z_features)
-                outputs.append(out2)
-                out, tgt_mask = squeeze(out1, tgt_mask)
+            if not self.single_z:
+                if i < self.levels - 1:
+                    out1, out2 = split(out, block.z_features)
+                    outputs.append(out2)
+                    out, tgt_mask = squeeze(out1, tgt_mask)
 
-        for _ in range(self.levels - 1):
-            out2 = outputs.pop()
-            out = unsqueeze(out)
-            out = unsplit([out, out2])
+        if not self.single_z:
+            for _ in range(self.levels - 1):
+                out2 = outputs.pop()
+                out = unsqueeze(out)
+                out = unsplit([out, out2])
         assert len(outputs) == 0
         return out, logdet_accum
 

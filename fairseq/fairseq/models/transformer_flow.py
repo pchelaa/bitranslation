@@ -630,7 +630,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
               "pos_enc": "attn",
               "max_length": args.max_target_positions,
               "dropout": 0.0,
-              "inverse": True
+              "inverse": True,
+              "single_z": True
             }
           }
         max_src_length = args.max_source_positions
@@ -844,13 +845,28 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
             z = z.squeeze(1)
 
-            if self.num_updates > self.kl_init_steps:
-                prior_log_probs = self.prior.log_probability(
-                    z,
-                    tgt_masks,
-                    src_encoded,
-                    src_masks,
-                )
+            if self.prior.flow.single_z:
+                z_ = torch.sum(z, dim=1, keepdim=True)
+                tgt_masks_ = z_.new_ones(z_.size(0), z_.size(1))
+
+                if self.num_updates > self.kl_init_steps:
+                    prior_log_probs = self.prior.log_probability(
+                        z_,
+                        tgt_masks_,
+                        src_encoded,
+                        src_masks,
+                    )
+                    prior_log_probs = prior_log_probs.view(prior_log_probs.size(0), 1)*z.size(-2)
+
+            # todo: this can be deleted as long as we use single z
+            else:
+                if self.num_updates > self.kl_init_steps:
+                    prior_log_probs = self.prior.log_probability(
+                        z,
+                        tgt_masks,
+                        src_encoded,
+                        src_masks,
+                    )
 
         else:
             z, prior_log_probs = self.prior.sample(
@@ -860,7 +876,10 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 nsamples=1
             )
 
-        x += z.transpose(0, 1)
+        if self.prior.flow.single_z:
+            x += z_.transpose(0, 1).repeat(x.size(0), 1, 1)
+        else:
+            x += z.transpose(0, 1)
 
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.padding_idx).any():
@@ -870,7 +889,6 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
 
-        # Эти лэйеры исполняются подряд, друг за другом?
         for idx, layer in enumerate(self.layers):
             encoder_state: Optional[Tensor] = None
             if encoder_out is not None:
