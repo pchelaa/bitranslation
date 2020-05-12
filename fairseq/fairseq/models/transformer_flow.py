@@ -886,7 +886,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.padding_idx).any():
-            prepend_tokens=torch.Tensor([self.eos_idx], device=prev_output_tokens.device).repeat(prev_output_tokens.shape[0], 1)
+            prepend_tokens=torch.Tensor([self.eos_idx]).repeat(prev_output_tokens.shape[0], 1).to(prev_output_tokens.device)
             self_attn_padding_mask = torch.cat([prepend_tokens, prev_output_tokens], dim=1).eq(self.padding_idx)
 
         # decoder layers
