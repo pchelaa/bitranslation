@@ -136,7 +136,7 @@ class TransformerWithFlowModel(FairseqEncoderDecoderModel):
         parser.add_argument('--share-all-embeddings', action='store_true',
                             help='share encoder, decoder and output embeddings'
                                  ' (requires shared dictionary and embed dim)')
-        parser.add_argument('--share-decoder-posterior-embeddings', default=False, action='store_true',
+        parser.add_argument('--share-decoder-posterior-embeddings', default=True, action='store_true',
                             help='share posterior and decoder embeddings')
         parser.add_argument('--no-token-positional-embeddings', default=False, action='store_true',
                             help='if set, disables positional embeddings (outside self attention)')
@@ -525,8 +525,10 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         self.embed_tokens = embed_tokens
 
         self.prior = self.build_prior(args)
-        _shared_embed = embed_tokens if args.share_decoder_posterior_embeddings else None
-        self.posterior = self.build_posterior(args, dictionary, _shared_embed)
+        self.posterior = self.build_posterior(
+            args,
+            dictionary,
+            embed_tokens if args.share_decoder_posterior_embeddings else None)
 
         self.dropout = args.dropout
         self.decoder_layerdrop = args.decoder_layerdrop
@@ -879,11 +881,12 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         if self.prior.flow.single_z:
             x += z_.transpose(0, 1).repeat(x.size(0), 1, 1)
         else:
-            x += z.transpose(0, 1)
+            z = torch.max(z, dim=1)[0].unsqueeze(1).transpose(0, 1)
+            x = torch.cat([z, x], dim=0)
 
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.padding_idx).any():
-            self_attn_padding_mask = prev_output_tokens.eq(self.padding_idx)
+            self_attn_padding_mask = torch.cat([torch.ones((x.shape[1], 1), device=x.device).float(), prev_output_tokens.eq(self.padding_idx).float()], dim=1).bool()
 
         # decoder layers
         attn: Optional[Tensor] = None
@@ -938,7 +941,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        return (x, prior_log_probs, posterior_log_probs), {"attn": [attn], "inner_states": inner_states}
+        return (x[:, 1:, :], prior_log_probs, posterior_log_probs), {"attn": [attn], "inner_states": inner_states}
 
     def output_layer(self, features):
         """Project features to the vocabulary size."""
