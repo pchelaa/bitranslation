@@ -633,7 +633,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
               "max_length": args.max_target_positions,
               "dropout": 0.0,
               "inverse": True,
-              "single_z": False
+              "single_z": True
             }
           }
         max_src_length = args.max_source_positions
@@ -653,7 +653,8 @@ class TransformerDecoder(FairseqIncrementalDecoder):
             "heads": 4,
             "max_length": args.max_target_positions,
             "dropout": 0.1,
-            "dropword": 0.2
+            "dropword": 0.2,
+            "single_z": True
           }
 
         posterior_params['vocab_size'] = len(dictionary)
