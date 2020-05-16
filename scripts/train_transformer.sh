@@ -133,32 +133,32 @@ if [ $preset == "base" ]; then
     arch=transformer
     criterion=label_smoothed_cross_entropy
     valid_subset=test
-    embed_dim=256
-    ffn_embed_dim=1024
-    max_tokens=1536
-    kl_init_steps=1500
-    kl_warmup_steps=5000
+    embed_dim=512
+    ffn_embed_dim=2048
+    max_tokens=3072
+    kl_init_steps=12000
+    kl_warmup_steps=4000
     even_source=0
     even_target=0
     group_by_first_token=0
-    max_source_poisitions=256
-    max_target_positions=256
+    max_source_poisitions=1024
+    max_target_positions=1024
 fi
 
 if [ $preset == "flow" ]; then
     arch=transformer_with_flow
     criterion=label_smoothed_cross_entropy_with_kl
     valid_subset=test
-    embed_dim=256
-    ffn_embed_dim=1024
-    max_tokens=1536
-    kl_init_steps=15000
-    kl_warmup_steps=5000
+    embed_dim=512
+    ffn_embed_dim=2048
+    max_tokens=3072
+    kl_init_steps=12000
+    kl_warmup_steps=4000
     even_source=1
     even_target=1
     group_by_first_token=0
-    max_source_positions=256
-    max_target_positions=256
+    max_source_positions=1024
+    max_target_positions=1024
 fi
 
 if [ $preset == "bidirectional" ]; then
