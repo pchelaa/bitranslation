@@ -115,7 +115,7 @@ class TransformerPosterior(Posterior):
         mu, logvar = self.core(tgt_sents, tgt_masks, src_enc, src_masks)
 
         if self.core.single_z:
-            tgt_masks = torch.ones([mu.shape[0], 1])
+            tgt_masks = torch.ones([mu.shape[0], 1], device=mu.device)
 
         z, eps = Posterior.reparameterize(mu, logvar, tgt_masks, nsamples=nsamples, random=random)
         log_probs = Posterior.log_probability(z, eps, mu, logvar, tgt_masks)
