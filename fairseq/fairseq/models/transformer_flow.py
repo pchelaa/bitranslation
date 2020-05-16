@@ -848,42 +848,22 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
             z = z.squeeze(1)
 
-            if self.prior.flow.single_z:
-                z_ = torch.sum(z, dim=1, keepdim=True)
-                tgt_masks_ = z_.new_ones(z_.size(0), z_.size(1))
-
-                if self.num_updates > self.kl_init_steps:
-                    prior_log_probs = self.prior.log_probability(
-                        z_,
-                        tgt_masks_,
-                        src_encoded,
-                        src_masks,
-                    )
-                    prior_log_probs = prior_log_probs.view(prior_log_probs.size(0), 1)*z.size(-2)
-
-            # todo: this can be deleted as long as we use single z
-            else:
-                if self.num_updates > self.kl_init_steps:
-                    prior_log_probs = self.prior.log_probability(
-                        z,
-                        tgt_masks,
-                        src_encoded,
-                        src_masks,
-                    )
-
+            if self.num_updates >= self.kl_init_steps:
+                prior_log_probs = self.prior.log_probability(
+                    z,
+                    z.new_ones(z.size(0), z.size(1)),
+                    src_encoded,
+                    src_masks,
+                )
         else:
             z, prior_log_probs = self.prior.sample(
                 src_encoded,
                 src_masks,
-                length=x.shape[0],
+                length=1,
                 nsamples=1
             )
 
-        if self.prior.flow.single_z:
-            x = torch.cat([z_.transpose(0, 1), x], dim=0)
-        else:
-            z = torch.max(z, dim=1)[0].unsqueeze(1).transpose(0, 1)
-            x = torch.cat([z, x], dim=0)
+        x = torch.cat([z.transpose(0, 1), x], dim=0)
 
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.padding_idx).any():
