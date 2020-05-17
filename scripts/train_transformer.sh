@@ -161,8 +161,8 @@ if [ $preset == "flow" ]; then
     max_target_positions=1024
 fi
 
-if [ $preset == "bidirectional" ]; then
-    arch=transformer_bidirectional
+if [ $preset == "multi-decoder" ]; then
+    arch=transformer_multi_decoder
     criterion=label_smoothed_cross_entropy
     valid_subset=en-fr,fr-en
     embed_dim=512
