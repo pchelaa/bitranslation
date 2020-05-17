@@ -27,13 +27,15 @@ from fairseq.modules import (
     TransformerEncoderLayer,
 )
 from torch import Tensor
+from flownmt.modules.priors.prior import Prior
+from flownmt.modules.posteriors.posterior import Posterior
 
 DEFAULT_MAX_SOURCE_POSITIONS = 1024
 DEFAULT_MAX_TARGET_POSITIONS = 1024
 
 
-@register_model("transformer_multi_decoder")
-class TransformerMultiDecoderModel(FairseqEncoderDecoderModel):
+@register_model("transformer_multi_flow")
+class TransformerMultiFlowModel(FairseqEncoderDecoderModel):
     """
     Transformer model from `"Attention Is All You Need" (Vaswani, et al, 2017)
     <https://arxiv.org/abs/1706.03762>`_.
@@ -134,7 +136,7 @@ class TransformerMultiDecoderModel(FairseqEncoderDecoderModel):
         parser.add_argument('--share-all-embeddings', action='store_true',
                             help='share encoder, decoder and output embeddings'
                                  ' (requires shared dictionary and embed dim)')
-        parser.add_argument('--share-decoder-posterior-embeddings', default=False, action='store_true',
+        parser.add_argument('--share-decoder-posterior-embeddings', default=True, action='store_true',
                             help='share posterior and decoder embeddings')
         parser.add_argument('--no-token-positional-embeddings', default=False, action='store_true',
                             help='if set, disables positional embeddings (outside self attention)')
@@ -165,8 +167,6 @@ class TransformerMultiDecoderModel(FairseqEncoderDecoderModel):
                             help='if True, dont scale embeddings')
         parser.add_argument('--kl-init-steps', default=30000, type=int, metavar='N',
                             help='number of iterations before calculating kl')
-        parser.add_argument('--kl-warmup-steps', default=10000, type=int, metavar='N',
-                            help='number of iterations of kl warmup')
         parser.add_argument('--lang-tokens', type=str, metavar='STR',
                             help='Comma-separated special language tokens')
         # fmt: on
@@ -311,6 +311,7 @@ class TransformerEncoder(FairseqEncoder):
         self.encoder_layerdrop = args.encoder_layerdrop
 
         embed_dim = embed_tokens.embedding_dim
+        self.eos_idx = dictionary.eos()
         self.padding_idx = embed_tokens.padding_idx
         self.max_source_positions = args.max_source_positions
 
@@ -523,129 +524,21 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
     def __init__(self, args, dictionary, embed_tokens, lang_tokens, no_encoder_attn=False):
         super().__init__(dictionary)
-        self.lang_tokens=lang_tokens
-        self.lang_decoders = nn.ModuleDict(
-            {
-                lang_token: TransformerLanguageDecoder(args, dictionary, embed_tokens, no_encoder_attn)
-                for lang_token in self.lang_tokens
-            }
-        )
-
-    def forward(
-        self,
-        prev_output_tokens,
-        encoder_out: Optional[EncoderOut] = None,
-        incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
-        features_only: bool = False,
-        alignment_layer: Optional[int] = None,
-        alignment_heads: Optional[int] = None,
-        src_lengths: Optional[Any] = None,
-        return_all_hiddens: bool = False,
-        first_tokens: Optional[Any] = None
-    ):
-        """
-        Args:
-            prev_output_tokens (LongTensor): previous decoder outputs of shape
-                `(batch, tgt_len)`, for teacher forcing
-            encoder_out (optional): output from the encoder, used for
-                encoder-side attention
-            incremental_state (dict): dictionary used for storing state during
-                :ref:`Incremental decoding`
-            features_only (bool, optional): only return features without
-                applying output layer (default: False).
-
-        Returns:
-            tuple:
-                - the decoder's output of shape `(batch, tgt_len, vocab)`
-                - a dictionary with any model-specific outputs
-        """
-
-        lang_token = str(first_tokens[0].item())
-        return self.lang_decoders[lang_token].forward(
-            prev_output_tokens,
-            encoder_out,
-            incremental_state,
-            features_only,
-            alignment_layer,
-            alignment_heads,
-            src_lengths,
-            return_all_hiddens,
-        )
-
-    def extract_features(
-        self,
-        prev_output_tokens,
-        encoder_out: Optional[EncoderOut] = None,
-        incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
-        full_context_alignment: bool = False,
-        alignment_layer: Optional[int] = None,
-        alignment_heads: Optional[int] = None,
-        first_tokens: Optional[Any] = None,
-    ):
-        """
-        Similar to *forward* but only return features.
-
-        Includes several features from "Jointly Learning to Align and
-        Translate with Transformer Models" (Garg et al., EMNLP 2019).
-
-        Args:
-            full_context_alignment (bool, optional): don't apply
-                auto-regressive mask to self-attention (default: False).
-            alignment_layer (int, optional): return mean alignment over
-                heads at this layer (default: last layer).
-            alignment_heads (int, optional): only average alignment over
-                this many heads (default: all heads).
-
-        Returns:
-            tuple:
-                - the decoder's features of shape `(batch, tgt_len, embed_dim)`
-                - a dictionary with any model-specific outputs
-        """
-        lang_token = str(first_tokens[0].item())
-        return self.lang_decoders[lang_token].extract_features(
-            prev_output_tokens,
-            encoder_out,
-            incremental_state,
-            full_context_alignment,
-            alignment_layer,
-            alignment_heads,
-        )
-
-    def reorder_incremental_state(self, incremental_state, new_order):
-        """Reorder incremental state.
-
-        This should be called when the order of the input has changed from the
-        previous time step. A typical use case is beam search, where the input
-        order changes between time steps based on the selection of beams.
-        """
-        for lang_token in self.lang_tokens:
-            self.lang_decoders[lang_token].reorder_incremental_state(incremental_state, new_order)
-
-    def set_beam_size(self, beam_size):
-        """Sets the beam size in the decoder and all children."""
-        for lang_token in self.lang_tokens:
-            self.lang_decoders[lang_token].set_beam_size(beam_size)
-
-
-class TransformerLanguageDecoder(FairseqIncrementalDecoder):
-    """
-    Transformer decoder consisting of *args.decoder_layers* layers. Each layer
-    is a :class:`TransformerDecoderLayer`.
-
-    Args:
-        args (argparse.Namespace): parsed command-line arguments
-        dictionary (~fairseq.data.Dictionary): decoding dictionary
-        embed_tokens (torch.nn.Embedding): output embedding
-        no_encoder_attn (bool, optional): whether to attend to encoder outputs
-            (default: False).
-    """
-
-    def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False):
-        super().__init__(dictionary)
         self.register_buffer("version", torch.Tensor([3]))
         self._future_mask = torch.empty(0)
 
         self.embed_tokens = embed_tokens
+        self.lang_tokens=lang_tokens
+
+        self.priors = self.build_priors(
+            args,
+            lang_tokens)
+
+        self.posteriors = self.build_posteriors(
+            args,
+            dictionary,
+            lang_tokens,
+            embed_tokens if args.share_decoder_posterior_embeddings else None)
 
         self.dropout = args.dropout
         self.decoder_layerdrop = args.decoder_layerdrop
@@ -656,6 +549,7 @@ class TransformerLanguageDecoder(FairseqIncrementalDecoder):
         self.embed_dim = embed_dim
         self.output_embed_dim = args.decoder_output_dim
 
+        self.eos_idx = dictionary.eos()
         self.padding_idx = embed_tokens.padding_idx
         self.max_target_positions = args.max_target_positions
 
@@ -727,6 +621,130 @@ class TransformerLanguageDecoder(FairseqIncrementalDecoder):
         else:
             self.layernorm_embedding = None
 
+    @classmethod
+    def build_priors(self, args, lang_tokens):
+        prior_params = {
+            "type": "normal",
+            "length_predictor": {
+              "type": "diff_softmax",
+              "diff_range": 16,
+              "dropout": 0.33,
+              "label_smoothing": 0.1
+            },
+            "flow": {
+              "levels": 2,
+              "num_steps": [4, 2],
+              "factors": [2],
+              "hidden_features": 512,
+              "transform": "affine",
+              "coupling_type": "self_attn",
+              "heads": 8,
+              "pos_enc": "attn",
+              "max_length": args.max_target_positions,
+              "dropout": 0.0,
+              "inverse": True,
+              "single_z": True
+            }
+          }
+        max_src_length = args.max_source_positions
+        latent_dim = args.decoder_embed_dim
+        prior_params['flow']['features'] = latent_dim
+        prior_params['flow']['src_features'] = latent_dim
+        prior_params['length_predictor']['features'] = latent_dim
+        prior_params['length_predictor']['max_src_length'] = max_src_length
+
+        return nn.ModuleDict(
+            {
+                lang_token: Prior.by_name(prior_params.pop('type')).from_params(prior_params)
+                for lang_token in lang_tokens
+            }
+        )
+
+    @classmethod
+    def build_posteriors(self, args, dictionary, lang_tokens, _shared_embed=None):
+        posterior_params = {
+            "type": "transformer",
+            "num_layers": 4,
+            "heads": 4,
+            "max_length": args.max_target_positions,
+            "dropout": 0.1,
+            "dropword": 0.2,
+            "single_z": True
+          }
+
+        posterior_params['vocab_size'] = len(dictionary)
+        posterior_params['padding_idx'] = dictionary.pad()
+        posterior_params['embed_dim'] = args.decoder_embed_dim
+        posterior_params['latent_dim'] = args.decoder_embed_dim
+        posterior_params['hidden_size'] = args.decoder_embed_dim
+        if _shared_embed is not None:
+            posterior_params['_shared_embed'] = _shared_embed
+
+        return nn.ModuleDict(
+            {
+                lang_token: Posterior.by_name(posterior_params.pop('type')).from_params(posterior_params)
+                for lang_token in lang_tokens
+            }
+        )
+
+    # Since get_normalized_probs is in the Fairseq Model which is not scriptable,
+    # I rewrite the get_normalized_probs from Base Class to call the
+    # helper function in the Base Class.
+    def get_normalized_probs(
+        self,
+        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+        log_probs: bool,
+        sample: Optional[Dict[str, Tensor]] = None,
+    ):
+        """Get normalized probabilities (or log probs) from a net's output."""
+        if hasattr(self, "adaptive_softmax") and self.adaptive_softmax is not None:
+            if sample is not None:
+                assert "target" in sample
+                target = sample["target"]
+            else:
+                target = None
+            out = self.adaptive_softmax.get_log_prob(net_output[0][0], target=target)
+            return out.exp_() if not log_probs else out
+
+        logits = net_output[0][0]
+        if log_probs:
+            return utils.log_softmax(logits, dim=-1, onnx_trace=self.onnx_trace)
+        else:
+            return utils.softmax(logits, dim=-1, onnx_trace=self.onnx_trace)
+
+    def get_logits(
+        self,
+        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+    ):
+        """Get prior log probabilities from a net's output."""
+
+        return net_output[0][0]
+
+    def get_prior_log_probability(
+        self,
+        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+    ):
+        """Get prior log probabilities from a net's output."""
+
+        return net_output[0][1]
+
+    def get_posterior_log_probability(
+        self,
+        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+    ):
+        """Get posterior log probabilities from a net's output."""
+
+        return net_output[0][2]
+
+    def update_logits(self,
+        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+        logits
+    ):
+        """Get prior log probabilities from a net's output."""
+
+        return ((logits, net_output[0][1], net_output[0][2]), net_output[1])
+
+
     def forward(
         self,
         prev_output_tokens,
@@ -737,6 +755,7 @@ class TransformerLanguageDecoder(FairseqIncrementalDecoder):
         alignment_heads: Optional[int] = None,
         src_lengths: Optional[Any] = None,
         return_all_hiddens: bool = False,
+        first_tokens=None
     ):
         """
         Args:
@@ -760,9 +779,10 @@ class TransformerLanguageDecoder(FairseqIncrementalDecoder):
             incremental_state=incremental_state,
             alignment_layer=alignment_layer,
             alignment_heads=alignment_heads,
+            first_tokens=first_tokens
         )
         if not features_only:
-            return self.output_layer(x), extra
+            return (self.output_layer(x[0]), x[1], x[2]), extra
         return x, extra
 
     def extract_features(
@@ -773,6 +793,7 @@ class TransformerLanguageDecoder(FairseqIncrementalDecoder):
         full_context_alignment: bool = False,
         alignment_layer: Optional[int] = None,
         alignment_heads: Optional[int] = None,
+        first_tokens: Optional[Any] = None,
     ):
         """
         Similar to *forward* but only return features.
@@ -827,15 +848,57 @@ class TransformerLanguageDecoder(FairseqIncrementalDecoder):
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
+        z, posterior_log_probs, prior_log_probs = None, None, None
+
+        lang_token = str(first_tokens[0].item())
+        prior = self.priors[lang_token]
+        posterior = self.posteriors[lang_token]
+
+        src_encoded = encoder_out.encoder_out.transpose(0, 1)
+        src_masks = (encoder_out.encoder_padding_mask == 0).float()
+
+        if self.training:
+            tgt_sents = torch.zeros_like(prev_output_tokens, device=prev_output_tokens.device)
+            tgt_sents[:, :-1] = prev_output_tokens[:, 1:]
+            tgt_sents[:, -1] = prev_output_tokens[:, 0]
+            tgt_masks = (tgt_sents.eq(self.eos_idx) == 0).float()
+
+            z, posterior_log_probs = posterior.sample(
+                tgt_sents,
+                tgt_masks,
+                src_encoded,
+                src_masks,
+                nsamples=1
+            )
+
+            z = z.squeeze(1)
+
+            if self.num_updates >= self.kl_init_steps:
+                prior_log_probs = prior.log_probability(
+                    z,
+                    z.new_ones(z.size(0), z.size(1)),
+                    src_encoded,
+                    src_masks,
+                )
+        else:
+            z, prior_log_probs = prior.sample(
+                src_encoded,
+                src_masks,
+                length=1,
+                nsamples=1
+            )
+
+        x = torch.cat([z.transpose(0, 1), x], dim=0)
+
         self_attn_padding_mask: Optional[Tensor] = None
         if self.cross_self_attention or prev_output_tokens.eq(self.padding_idx).any():
-            self_attn_padding_mask = prev_output_tokens.eq(self.padding_idx)
+            prepend_tokens=torch.Tensor([self.eos_idx]).repeat(prev_output_tokens.shape[0], 1).to(prev_output_tokens.device)
+            self_attn_padding_mask = torch.cat([prepend_tokens.float(), prev_output_tokens.float()], dim=1).long().eq(self.padding_idx)
 
         # decoder layers
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
 
-        # Эти лэйеры исполняются подряд, друг за другом?
         for idx, layer in enumerate(self.layers):
             encoder_state: Optional[Tensor] = None
             if encoder_out is not None:
@@ -885,7 +948,7 @@ class TransformerLanguageDecoder(FairseqIncrementalDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        return x, {"attn": [attn], "inner_states": inner_states}
+        return (x[:, 1:, :], prior_log_probs, posterior_log_probs), {"attn": [attn], "inner_states": inner_states}
 
     def output_layer(self, features):
         """Project features to the vocabulary size."""
@@ -970,7 +1033,7 @@ def Linear(in_features, out_features, bias=True):
     return m
 
 
-@register_model_architecture("transformer_multi_decoder", "transformer_multi_decoder")
+@register_model_architecture("transformer_multi_flow", "transformer_multi_flow")
 def base_architecture(args):
     args.encoder_embed_path = getattr(args, "encoder_embed_path", None)
     args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 512)
