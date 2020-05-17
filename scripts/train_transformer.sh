@@ -177,6 +177,23 @@ if [ $preset == "multi-decoder" ]; then
     max_target_positions=1024
 fi
 
+if [ $preset == "multi-flow" ]; then
+    arch=transformer_multi_flow
+    criterion=label_smoothed_cross_entropy_with_kl
+    valid_subset=en-fr,fr-en
+    embed_dim=512
+    ffn_embed_dim=2048
+    max_tokens=3072
+    kl_init_steps=12000
+    kl_warmup_steps=4000
+    even_source=1
+    even_target=1
+    group_by_first_token=1
+    max_source_positions=1024
+    max_target_positions=1024
+fi
+
+
 ##############################################################################################################
 
 data_dir=$base_dir/data
