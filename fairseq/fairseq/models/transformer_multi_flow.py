@@ -657,7 +657,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         return nn.ModuleDict(
             {
-                lang_token: Prior.by_name(type).from_params(prior_params) for lang_token in lang_tokens
+                lang_token: Prior.by_name(type).from_params(prior_params.copy()) for lang_token in lang_tokens
             }
         )
 
@@ -684,7 +684,7 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         return nn.ModuleDict(
             {
-                lang_token: Posterior.by_name(type).from_params(posterior_params) for lang_token in lang_tokens
+                lang_token: Posterior.by_name(type).from_params(posterior_params.copy()) for lang_token in lang_tokens
             }
         )
 
