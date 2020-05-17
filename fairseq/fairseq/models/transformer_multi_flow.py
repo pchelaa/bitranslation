@@ -653,10 +653,11 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         prior_params['length_predictor']['features'] = latent_dim
         prior_params['length_predictor']['max_src_length'] = max_src_length
 
+        type = prior_params.pop('type')
+
         return nn.ModuleDict(
             {
-                lang_token: Prior.by_name(prior_params.pop('type')).from_params(prior_params)
-                for lang_token in lang_tokens
+                lang_token: Prior.by_name(type).from_params(prior_params) for lang_token in lang_tokens
             }
         )
 
@@ -679,11 +680,11 @@ class TransformerDecoder(FairseqIncrementalDecoder):
         posterior_params['hidden_size'] = args.decoder_embed_dim
         if _shared_embed is not None:
             posterior_params['_shared_embed'] = _shared_embed
+        type = posterior_params.pop('type')
 
         return nn.ModuleDict(
             {
-                lang_token: Posterior.by_name(posterior_params.pop('type')).from_params(posterior_params)
-                for lang_token in lang_tokens
+                lang_token: Posterior.by_name(type).from_params(posterior_params) for lang_token in lang_tokens
             }
         )
 
