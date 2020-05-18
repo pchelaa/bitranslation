@@ -102,14 +102,14 @@ class Prior(nn.Module):
         # MY_CHANGES:
 
         max_length = length
-        if max_length % 4 != 0:
-            max_length += 4 - (max_length % 4)
+        # if max_length % 4 != 0:
+        #     max_length += 4 - (max_length % 4)
 
         batch = src.size(0)
         tgt_mask = torch.arange(max_length).to(src.device).unsqueeze(0).expand(batch, max_length).lt(length).float()
 
         # [batch, nsamples, tgt_length, nz]
-        epsilon = src.new_empty(batch, nsamples, max_length, self.features).normal_()
+        epsilon = src.new_empty(batch, nsamples, max_length, self.features).normal_() * tau
         if include_zero:
             epsilon[:, 0].zero_()
         # [batch * nsamples, tgt_length, nz]
@@ -132,7 +132,7 @@ class Prior(nn.Module):
         # [batch * nlength * nsamples, tgt_length, nz]
         z, log_probs = self.decode(epsilon, tgt_mask, src, src_mask)
 
-        return z[:, :length, :], log_probs
+        return z, log_probs
 
     def log_probability(self,
                         z: torch.Tensor,
