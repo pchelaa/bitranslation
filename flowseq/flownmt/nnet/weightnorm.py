@@ -19,9 +19,10 @@ class LinearWeightNorm(nn.Module):
         self.linear = nn.utils.weight_norm(self.linear)
 
     def extra_repr(self):
-        return 'in_features={}, out_features={}, bias={}'.format(
-            self.in_features, self.out_features, self.bias is not None
-        )
+        # return 'in_features={}, out_features={}, bias={}'.format(
+        #     self.in_features, self.out_features, self.bias is not None
+        # )
+        return 'LinearWeightNorm class'
 
     def init(self, x, init_scale=1.0):
         with torch.no_grad():

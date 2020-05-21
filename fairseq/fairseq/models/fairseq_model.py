@@ -28,6 +28,7 @@ class BaseFairseqModel(nn.Module):
     def __init__(self):
         super().__init__()
         self._is_generation_fast = False
+        self.num_updates = 0
 
     @staticmethod
     def add_args(parser):
@@ -71,6 +72,52 @@ class BaseFairseqModel(nn.Module):
                 return F.log_softmax(logits, dim=-1)
             else:
                 return F.softmax(logits, dim=-1)
+        raise NotImplementedError
+
+    def get_logits(
+        self,
+        net_output
+    ):
+        """Get logits from a net's output."""
+        if hasattr(self, "decoder"):
+            return self.decoder.get_logits(net_output)
+        raise NotImplementedError
+
+    def get_avg_attn_scores(
+        self,
+        net_output
+    ):
+        """Get prior average attn scores from a net's output."""
+        if hasattr(self, "decoder"):
+            return self.decoder.get_avg_attn_scores(net_output)
+        raise NotImplementedError
+
+    def get_prior_log_probability(
+        self,
+        net_output
+    ):
+        """Get prior log probabilities from a net's output."""
+        if hasattr(self, "decoder"):
+            return self.decoder.get_prior_log_probability(net_output)
+        raise NotImplementedError
+
+    def get_posterior_log_probability(
+        self,
+        net_output
+    ):
+        """Get posterior log probabilities from a net's output."""
+        if hasattr(self, "decoder"):
+            return self.decoder.get_posterior_log_probability(net_output)
+        raise NotImplementedError
+
+    def update_logits(
+        self,
+        net_output,
+        logits
+    ):
+        """Set logits to a net's output."""
+        if hasattr(self, "decoder"):
+            return self.decoder.update_logits(net_output, logits)
         raise NotImplementedError
 
     def extract_features(self, *args, **kwargs):
@@ -126,7 +173,7 @@ class BaseFairseqModel(nn.Module):
             if hasattr(m, 'set_num_updates') and m != self:
                 m.set_num_updates(num_updates)
         self.apply(_apply)
-
+        self.num_updates = num_updates
 
     def make_generation_fast_(self, **kwargs):
         """Optimize model for faster generation."""

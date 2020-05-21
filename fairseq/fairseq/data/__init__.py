@@ -16,6 +16,7 @@ from .colorize_dataset import ColorizeDataset
 from .concat_dataset import ConcatDataset
 from .concat_sentences_dataset import ConcatSentencesDataset
 from .denoising_dataset import DenoisingDataset
+from .even_dataset import EvenDataset
 from .id_dataset import IdDataset
 from .indexed_dataset import IndexedCachedDataset, IndexedDataset, IndexedRawTextDataset, MMapIndexedDataset
 from .language_pair_dataset import LanguagePairDataset
@@ -64,6 +65,7 @@ __all__ = [
     'DenoisingDataset',
     'Dictionary',
     'EpochBatchIterator',
+    'EvenDataset'
     'FairseqDataset',
     'FairseqIterableDataset',
     'GroupedIterator',

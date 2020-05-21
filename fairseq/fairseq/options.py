@@ -326,6 +326,8 @@ def add_dataset_args(parser, train=False, gen=False):
                        help='maximum number of sentences in a batch')
     group.add_argument('--required-batch-size-multiple', default=8, type=int, metavar='N',
                        help='batch size will be a multiplier of this value')
+    group.add_argument('--group-by-first-token', default=0, type=int, metavar='N',
+                       help='group batch by first token')
     parser.add_argument('--dataset-impl', metavar='FORMAT',
                         choices=get_available_dataset_impl(),
                         help='output dataset implementation')

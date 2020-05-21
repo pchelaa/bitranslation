@@ -57,7 +57,7 @@ class MultilingualDenoisingTask(DenoisingTask):
         else:
             languages = args.langs.split(',')
 
-        if args.add_lang_token:
+        if args.add_first_tokens:
             for lang in languages:
                 dictionary.add_symbol('[{}]'.format(lang))
 
@@ -129,7 +129,7 @@ class MultilingualDenoisingTask(DenoisingTask):
                 raise FileNotFoundError('Dataset not found: {} ({})'.format(split, split_path))
 
             end_token = self.source_dictionary.index('[{}]'.format(language)) \
-                if self.args.add_lang_token else self.source_dictionary.eos()
+                if self.args.add_first_tokens else self.source_dictionary.eos()
 
             # create continuous blocks of tokens
             dataset = TokenBlockDataset(
@@ -156,7 +156,7 @@ class MultilingualDenoisingTask(DenoisingTask):
                 shuffle=self.args.shuffle_instance,
                 seed=self.seed,
                 args=self.args,
-                eos=None if not self.args.add_lang_token else self.source_dictionary.index('[{}]'.format(language)),
+                eos=None if not self.args.add_first_tokens else self.source_dictionary.index('[{}]'.format(language)),
             )
             lang_datasets.append(lang_dataset)
 

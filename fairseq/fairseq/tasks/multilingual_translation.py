@@ -25,13 +25,13 @@ from fairseq import utils
 logger = logging.getLogger(__name__)
 
 
-def _lang_token(lang: str):
+def _first_tokens(lang: str):
     return '__{}__'.format(lang)
 
 
-def _lang_token_index(dic: Dictionary, lang: str):
+def _first_tokens_index(dic: Dictionary, lang: str):
     """Return language token index."""
-    idx = dic.index(_lang_token(lang))
+    idx = dic.index(_first_tokens(lang))
     assert idx != dic.unk_index, \
         'cannot find language token for lang {}'.format(lang)
     return idx
@@ -144,7 +144,7 @@ class MultilingualTranslationTask(FairseqTask):
                 assert dicts[lang].unk() == dicts[sorted_langs[0]].unk()
             if args.encoder_langtok is not None or args.decoder_langtok:
                 for lang_to_add in sorted_langs:
-                    dicts[lang].add_symbol(_lang_token(lang_to_add))
+                    dicts[lang].add_symbol(_first_tokens(lang_to_add))
             logger.info('[{}] dictionary: {} types'.format(lang, len(dicts[lang])))
         return dicts, training
 
@@ -152,14 +152,14 @@ class MultilingualTranslationTask(FairseqTask):
         if self.args.encoder_langtok is None:
             return self.dicts[src_lang].eos()
         if self.args.encoder_langtok == 'src':
-            return _lang_token_index(self.dicts[src_lang], src_lang)
+            return _first_tokens_index(self.dicts[src_lang], src_lang)
         else:
-            return _lang_token_index(self.dicts[src_lang], tgt_lang)
+            return _first_tokens_index(self.dicts[src_lang], tgt_lang)
 
     def get_decoder_langtok(self, tgt_lang):
         if not self.args.decoder_langtok:
             return self.dicts[tgt_lang].eos()
-        return _lang_token_index(self.dicts[tgt_lang], tgt_lang)
+        return _first_tokens_index(self.dicts[tgt_lang], tgt_lang)
 
     def alter_dataset_langtok(self, lang_pair_dataset,
                               src_eos=None, src_lang=None, tgt_eos=None, tgt_lang=None):
@@ -303,7 +303,7 @@ class MultilingualTranslationTask(FairseqTask):
                     models,
                     sample,
                     prefix_tokens=prefix_tokens,
-                    bos_token=_lang_token_index(self.target_dictionary, self.args.target_lang)
+                    bos_token=_first_tokens_index(self.target_dictionary, self.args.target_lang)
                     if self.args.decoder_langtok else self.target_dictionary.eos(),
             )
 

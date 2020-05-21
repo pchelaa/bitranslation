@@ -238,8 +238,109 @@ class SequenceGenerator(nn.Module):
         bbsz_offsets = (torch.arange(0, bsz) * beam_size).unsqueeze(1).type_as(tokens)
         cand_offsets = torch.arange(0, cand_size).type_as(tokens)
 
-        reorder_state: Optional[Tensor] = None
-        batch_idxs: Optional[Tensor] = None
+        # helper function for allocating buffers on the fly
+        buffers = {}
+
+        def buffer(name, type_of=tokens):  # noqa
+            if name not in buffers:
+                buffers[name] = type_of.new()
+            return buffers[name]
+
+        def is_finished(sent, step, unfin_idx):
+            """
+            Check whether we've finished generation for a given sentence, by
+            comparing the worst score among finalized hypotheses to the best
+            possible score among unfinalized hypotheses.
+            """
+            assert len(finalized[sent]) <= beam_size
+            if len(finalized[sent]) == beam_size or step == max_len:
+                return True
+            return False
+
+        def finalize_hypos(step, bbsz_idx, eos_scores):
+            """
+            Finalize the given hypotheses at this step, while keeping the total
+            number of finalized hypotheses per sentence <= beam_size.
+
+            Note: the input must be in the desired finalization order, so that
+            hypotheses that appear earlier in the input are preferred to those
+            that appear later.
+
+            Args:
+                step: current time step
+                bbsz_idx: A vector of indices in the range [0, bsz*beam_size),
+                    indicating which hypotheses to finalize
+                eos_scores: A vector of the same size as bbsz_idx containing
+                    scores for each hypothesis
+            """
+            assert bbsz_idx.numel() == eos_scores.numel()
+
+            # clone relevant token and attention tensors
+            tokens_clone = tokens.index_select(0, bbsz_idx)
+            tokens_clone = tokens_clone[:, 1:step + 2]  # skip the first index, which is EOS
+            assert not tokens_clone.eq(self.eos).any()
+            tokens_clone[:, step] = self.eos
+            attn_clone = attn.index_select(0, bbsz_idx)[:, :, 1:step+2] if attn is not None else None
+
+            # compute scores per token position
+            pos_scores = scores.index_select(0, bbsz_idx)[:, :step+1]
+            pos_scores[:, step] = eos_scores
+            # convert from cumulative to per-position scores
+            pos_scores[:, 1:] = pos_scores[:, 1:] - pos_scores[:, :-1]
+
+            # normalize sentence-level scores
+            if self.normalize_scores:
+                eos_scores /= (step + 1) ** self.len_penalty
+
+            cum_unfin = []
+            prev = 0
+            for f in finished:
+                if f:
+                    prev += 1
+                else:
+                    cum_unfin.append(prev)
+
+            sents_seen = set()
+            for i, (idx, score) in enumerate(zip(bbsz_idx.tolist(), eos_scores.tolist())):
+                unfin_idx = idx // beam_size
+                sent = unfin_idx + cum_unfin[unfin_idx]
+
+                sents_seen.add((sent, unfin_idx))
+
+                if self.match_source_len and step > src_lengths[unfin_idx]:
+                    score = -math.inf
+
+                def get_hypo():
+
+                    if attn_clone is not None:
+                        # remove padding tokens from attn scores
+                        hypo_attn = attn_clone[i]
+                    else:
+                        hypo_attn = None
+
+                    return {
+                        'tokens': tokens_clone[i],
+                        'score': score,
+                        'attention': hypo_attn,  # src_len x tgt_len
+                        'alignment': None,
+                        'positional_scores': pos_scores[i],
+                    }
+
+                if len(finalized[sent]) < beam_size:
+                    finalized[sent].append(get_hypo())
+
+            newly_finished = []
+            for sent, unfin_idx in sents_seen:
+                # check termination conditions for this sentence
+                if not finished[sent] and is_finished(sent, step, unfin_idx):
+                    finished[sent] = True
+                    newly_finished.append(unfin_idx)
+            return newly_finished
+
+        reorder_state = None
+        batch_idxs = None
+        first_tokens = src_tokens[:, 0]
+
         for step in range(max_len + 1):  # one extra step for EOS marker
             # reorder decoder internal states based on the prev choice of beams
             # print(f'step: {step}')
@@ -257,10 +358,12 @@ class SequenceGenerator(nn.Module):
                     encoder_outs, reorder_state
                 )
 
-            lprobs, avg_attn_scores = self.model.forward_decoder(
-                tokens[:, : step + 1], encoder_outs, self.temperature
+            decoder_output = model.forward_decoder(
+                tokens[:, :step + 1], encoder_outs, temperature=self.temperature, first_tokens=first_tokens
             )
-            lprobs[lprobs != lprobs] = torch.tensor(-math.inf).to(lprobs)
+
+            lprobs = model.get_logits(decoder_output)
+            lprobs[lprobs != lprobs] = -math.inf
 
             lprobs[:, self.pad] = -math.inf  # never select pad
             lprobs[:, self.unk] -= self.unk_penalty  # apply unk penalty
@@ -283,6 +386,19 @@ class SequenceGenerator(nn.Module):
                 # minimum length constraint (does not apply if using prefix_tokens)
                 lprobs[:, self.eos] = -math.inf
 
+            if self.no_repeat_ngram_size > 0:
+                # for each beam and batch sentence, generate a list of previous ngrams
+                gen_ngrams = [{} for bbsz_idx in range(bsz * beam_size)]
+                for bbsz_idx in range(bsz * beam_size):
+                    gen_tokens = tokens[bbsz_idx].tolist()
+                    for ngram in zip(*[gen_tokens[i:] for i in range(self.no_repeat_ngram_size)]):
+                        gen_ngrams[bbsz_idx][tuple(ngram[:-1])] = \
+                                gen_ngrams[bbsz_idx].get(tuple(ngram[:-1]), []) + [ngram[-1]]
+
+            # Record attention scores
+            avg_attn_scores = model.get_avg_attn_scores(decoder_output)
+            if type(avg_attn_scores) is list:
+                avg_attn_scores = avg_attn_scores[0]
             # Record attention scores, only support avg_attn_scores is a Tensor
             if avg_attn_scores is not None:
                 if attn is None:
@@ -708,47 +824,30 @@ class EnsembleModel(nn.Module):
             for model in self.models
         ]
 
-    @torch.jit.export
-    def forward_decoder(
-        self, tokens, encoder_outs: List[EncoderOut], temperature: float = 1.0
-    ):
-        log_probs = []
-        avg_attn: Optional[Tensor] = None
-        encoder_out: Optional[EncoderOut] = None
-        for i, model in enumerate(self.models):
-            if self.has_encoder():
-                encoder_out = encoder_outs[i]
-            # decode each model
-            if self.has_incremental_states():
-                decoder_out = model.decoder.forward(
-                    tokens,
-                    encoder_out=encoder_out,
-                    incremental_state=self.incremental_states[i],
-                )
-            else:
-                decoder_out = model.decoder.forward(tokens, encoder_out=encoder_out)
-
-            attn: Optional[Tensor] = None
-            decoder_len = len(decoder_out)
-            if decoder_len > 1 and decoder_out[1] is not None:
-                if isinstance(decoder_out[1], Tensor):
-                    attn = decoder_out[1]
-                else:
-                    attn_holder = decoder_out[1]["attn"]
-                    if isinstance(attn_holder, Tensor):
-                        attn = attn_holder
-                    elif attn_holder is not None:
-                        attn = attn_holder[0]
-                if attn is not None:
-                    attn = attn[:, -1, :]
-
-            decoder_out_tuple = (
-                decoder_out[0][:, -1:, :].div_(temperature),
-                None if decoder_len <= 1 else decoder_out[1],
+    @torch.no_grad()
+    def forward_decoder(self, tokens, encoder_outs, temperature=1., first_tokens=None):
+        if len(self.models) == 1:
+            return self._decode_one(
+                tokens,
+                self.models[0],
+                encoder_outs[0] if self.has_encoder() else None,
+                self.incremental_states,
+                log_probs=True,
+                temperature=temperature,
+                first_tokens=first_tokens,
             )
 
-            probs = model.get_normalized_probs(
-                decoder_out_tuple, log_probs=True, sample=None
+        log_probs = []
+        avg_attn = None
+        for model, encoder_out in zip(self.models, encoder_outs):
+            probs, attn = self._decode_one(
+                tokens,
+                model,
+                encoder_out,
+                self.incremental_states,
+                log_probs=True,
+                temperature=temperature,
+                first_tokens=first_tokens,
             )
             probs = probs[:, -1, :]
             if self.models_size == 1:
@@ -766,6 +865,35 @@ class EnsembleModel(nn.Module):
         if avg_attn is not None:
             avg_attn.div_(self.models_size)
         return avg_probs, avg_attn
+
+    def _decode_one(
+        self, tokens, model, encoder_out, incremental_states, log_probs,
+        temperature=1.,
+        first_tokens=None,
+    ):
+        if self.incremental_states is not None:
+            decoder_out = list(model.forward_decoder(
+                tokens, encoder_out=encoder_out, incremental_state=self.incremental_states[model], first_tokens=first_tokens
+            ))
+        else:
+            decoder_out = list(model.forward_decoder(tokens, encoder_out=encoder_out, first_tokens=first_tokens))
+
+        logits = model.get_logits(decoder_out)
+        logits = logits[:, -1:, :]
+        if temperature != 1.:
+            logits.div_(temperature)
+        decoder_out = model.update_logits(decoder_out, logits)
+
+        attn = model.get_avg_attn_scores(decoder_out)
+        if type(attn) is dict:
+            attn = attn.get('attn', None)
+        if type(attn) is list:
+            attn = attn[0]
+        if attn is not None:
+            attn = attn[:, -1, :]
+        probs = model.get_normalized_probs(decoder_out, log_probs=log_probs)
+        probs = probs[:, -1, :]
+        return probs, attn
 
     @torch.jit.export
     def reorder_encoder_out(self, encoder_outs: Optional[List[EncoderOut]], new_order):
@@ -797,6 +925,32 @@ class EnsembleModel(nn.Module):
             model.decoder.reorder_incremental_state(
                 self.incremental_states[i], new_order
             )
+
+    def get_logits(
+        self,
+        net_output
+    ):
+        """Get logits from a net's output."""
+        if net_output is None:
+            return None
+        return net_output[0]
+
+    def get_avg_attn_scores(
+        self,
+        net_output
+    ):
+        """Get average attn scores from a net's output."""
+        if net_output is None:
+            return None
+        return net_output[1]
+
+    def update_logits(
+        self,
+        net_output,
+        logits
+    ):
+        """Set logits to a net's output."""
+        return (logits, net_output[1])
 
 
 class SequenceGeneratorWithAlignment(SequenceGenerator):
@@ -893,6 +1047,37 @@ class EnsembleModelWithAlignment(EnsembleModel):
             avg_attn.div_(len(self.models))
         return avg_attn
 
+    def _decode_one(
+        self, tokens, model, encoder_out, incremental_states, log_probs,
+        temperature=1.,
+        first_tokens=None
+    ):
+        if self.incremental_states is not None:
+            decoder_out = list(model.forward_decoder(
+                tokens,
+                encoder_out=encoder_out,
+                incremental_state=self.incremental_states[model],
+                first_tokens=first_tokens
+            ))
+        else:
+            decoder_out = list(model.forward_decoder(tokens, encoder_out=encoder_out, first_tokens=first_tokens))
+
+        logits = model.get_logits(decoder_out)
+        logits = logits[:, -1:, :]
+        if temperature != 1.:
+            logits.div_(temperature)
+        decoder_out = model.update_logits(decoder_out, logits)
+
+        attn = model.get_avg_attn_scores(decoder_out)
+        if type(attn) is dict:
+            attn = attn.get('attn', None)
+        if type(attn) is list:
+            attn = attn[0]
+        if attn is not None:
+            attn = attn[:, -1, :]
+        probs = model.get_normalized_probs(decoder_out, log_probs=log_probs)
+        probs = probs[:, -1, :]
+        return probs, attn
 
 @torch.jit.script
 class BeamContainer(object):

@@ -265,6 +265,9 @@ class LanguagePairDataset(FairseqDataset):
         enforce ``--max-tokens`` during batching."""
         return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
 
+    def first_token(self, index):
+        return self.src[index][0]
+
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when
         filtering a dataset with ``--max-positions``."""

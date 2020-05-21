@@ -320,6 +320,7 @@ class Trainer(object):
             ),
             ignore_invalid_inputs=True,
             required_batch_size_multiple=self.args.required_batch_size_multiple,
+            group_by_first_token=self.args.group_by_first_token,
             seed=self.args.seed,
             num_shards=self.data_parallel_world_size if shard_batch_itr else 1,
             shard_id=self.data_parallel_rank if shard_batch_itr else 0,
