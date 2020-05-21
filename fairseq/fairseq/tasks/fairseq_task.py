@@ -117,7 +117,7 @@ class FairseqTask(object):
         num_shards=1,
         shard_id=0,
         num_workers=0,
-        epoch=0,
+        epoch=1
     ):
         """
         Get an iterator that yields batches of data from the given dataset.
@@ -146,7 +146,7 @@ class FairseqTask(object):
                 loading. 0 means the data will be loaded in the main process
                 (default: 0).
             epoch (int, optional): the epoch to start the iterator from
-                (default: 0).
+                (default: 1).
         Returns:
             ~fairseq.iterators.EpochBatchIterator: a batched iterator over the
                 given dataset split
@@ -200,6 +200,7 @@ class FairseqTask(object):
             shard_id=shard_id,
             num_workers=num_workers,
             epoch=epoch,
+            buffer_size=getattr(self.args, 'data_buffer_size', 0)
         )
         self.dataset_to_epoch_iter[dataset] = epoch_iter
         return epoch_iter
@@ -215,9 +216,12 @@ class FairseqTask(object):
         Returns:
             a :class:`~fairseq.models.BaseFairseqModel` instance
         """
-        from fairseq import models
-
-        return models.build_model(args, self)
+        from fairseq import models, quantization_utils
+        model = models.build_model(args, self)
+        if getattr(args, 'tpu', False):
+            model.prepare_for_tpu_()
+        model = quantization_utils.quantize_model_scalar(model, args)
+        return model
 
     def build_criterion(self, args):
         """
@@ -234,7 +238,7 @@ class FairseqTask(object):
 
         return criterions.build_criterion(args, self)
 
-    def build_generator(self, args):
+    def build_generator(self, models, args):
         if getattr(args, "score_reference", False):
             from fairseq.sequence_scorer import SequenceScorer
 
@@ -253,7 +257,7 @@ class FairseqTask(object):
         sampling_topk = getattr(args, "sampling_topk", -1)
         sampling_topp = getattr(args, "sampling_topp", -1.0)
         diverse_beam_groups = getattr(args, "diverse_beam_groups", -1)
-        diverse_beam_strength = (getattr(args, "diverse_beam_strength", 0.5),)
+        diverse_beam_strength = getattr(args, "diverse_beam_strength", 0.5)
         match_source_len = getattr(args, "match_source_len", False)
         diversity_rate = getattr(args, "diversity_rate", -1)
         if (
@@ -304,6 +308,7 @@ class FairseqTask(object):
             seq_gen_cls = SequenceGenerator
 
         return seq_gen_cls(
+            models,
             self.target_dictionary,
             beam_size=getattr(args, "beam", 5),
             max_len_a=getattr(args, "max_len_a", 0),
@@ -395,18 +400,16 @@ class FairseqTask(object):
                 "ntokens not found in Criterion logging outputs, cannot log wpb or wps"
             )
         else:
-            ntokens = utils.item(sum(log.get("ntokens", 0) for log in logging_outputs))
+            ntokens = sum(log.get("ntokens", 0) for log in logging_outputs)
             metrics.log_scalar("wpb", ntokens, priority=180, round=1)
-            metrics.log_speed("wps", ntokens, ignore_first=10, priority=90, round=1)
+            metrics.log_speed("wps", ntokens, priority=90, round=1)
 
         if not any("nsentences" in log for log in logging_outputs):
             warnings.warn(
                 "nsentences not found in Criterion logging outputs, cannot log bsz"
             )
         else:
-            nsentences = utils.item(
-                sum(log.get("nsentences", 0) for log in logging_outputs)
-            )
+            nsentences = sum(log.get("nsentences", 0) for log in logging_outputs)
             metrics.log_scalar("bsz", nsentences, priority=190, round=1)
 
         criterion.__class__.reduce_metrics(logging_outputs)
