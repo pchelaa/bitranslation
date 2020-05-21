@@ -724,6 +724,33 @@ class TransformerDecoder(FairseqIncrementalDecoder):
 
         return ((logits, net_output[0][1], net_output[0][2]), net_output[1])
 
+    def argmax_sample_from_prior(
+        self, src_encoded, src_masks, length=1,
+        nsamples=1, tau=0.0, include_zero=False
+    ):
+        """Sample from prior nsamples of z and choose one with highest logprob"""
+
+        z, prior_log_probs = self.prior.sample(src_encoded, src_masks,
+                                               length=length, nsamples=nsamples,
+                                               tau=tau, include_zero=include_zero)
+
+        batch = src_encoded.size(0)
+
+        if nsamples > 1:
+            _, length, nz = z.size()
+            # [batch, n_tr, tgt_length, nz]
+            z = z.view(batch, nsamples, length, nz)
+            # [batch, n_tr]
+            prior_log_probs = prior_log_probs.view(batch, nsamples)
+            # [batch]
+            idx = prior_log_probs.argmax(dim=1)
+            batch_idx = torch.arange(0, batch).long().to(idx.device)
+            # [batch, tgt_length, nz]
+            z = z[batch_idx, idx]
+            # [batch]
+            prior_log_probs = prior_log_probs[batch_idx, idx]
+
+        return z, prior_log_probs
 
     def forward(
         self,
@@ -846,7 +873,9 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                 nsamples=1
             )
 
-            z = z.squeeze(1)
+            batch, _, length, nz = z.size()
+            # [batch * nsamples, tgt_length, nz]
+            z = z.view(-1, length, nz)
 
             if self.num_updates >= self.kl_init_steps:
                 prior_log_probs = self.prior.log_probability(
@@ -856,11 +885,9 @@ class TransformerDecoder(FairseqIncrementalDecoder):
                     src_masks,
                 )
         else:
-            z, prior_log_probs = self.prior.sample(
-                src_encoded,
-                src_masks,
-                length=1,
-                nsamples=1
+            z, prior_log_probs = self.argmax_sample_from_prior(
+                src_encoded, src_masks,
+                length=1, nsamples=10, tau=0.3, include_zero=False
             )
 
         x = torch.cat([z.transpose(0, 1), x], dim=0)
