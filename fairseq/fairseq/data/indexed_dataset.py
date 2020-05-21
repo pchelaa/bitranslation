@@ -239,6 +239,7 @@ class IndexedRawTextDataset(FairseqDataset):
         self.reverse_order = reverse_order
         self.read_data(path, dictionary)
         self.size = len(self.tokens_list)
+        self.pad_idx = dictionary.pad()
 
     def read_data(self, path, dictionary):
         with open(path, 'r', encoding='utf-8') as f:
@@ -273,6 +274,12 @@ class IndexedRawTextDataset(FairseqDataset):
 
     def num_tokens(self, index):
         return self.sizes[index]
+
+    def first_token(self, index):
+        j = 0
+        while self.tokens_list[index][j] == self.pad_idx:
+            j += 1
+        return self.tokens_list[index][j]
 
     def size(self, index):
         return self.sizes[index]
@@ -475,7 +482,6 @@ class MMapIndexedDataset(torch.utils.data.Dataset):
         np_array = np.frombuffer(self._bin_buffer, dtype=self._index.dtype, count=size, offset=ptr)
         if self._index.dtype != np.int64:
             np_array = np_array.astype(np.int64)
-
         return torch.from_numpy(np_array)
 
     @property

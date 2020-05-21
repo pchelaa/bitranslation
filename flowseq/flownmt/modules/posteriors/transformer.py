@@ -12,7 +12,8 @@ from flownmt.modules.posteriors.posterior import Posterior
 
 
 class TransformerCore(nn.Module):
-    def __init__(self, embed, num_layers, latent_dim, hidden_size, heads, dropout=0.0, dropword=0.0, max_length=100):
+    def __init__(self, embed, num_layers, latent_dim, hidden_size, heads, dropout=0.0, dropword=0.0, max_length=100,
+                 single_z=False):
         super(TransformerCore, self).__init__()
         self.tgt_embed = embed
         self.padding_idx = embed.padding_idx
@@ -26,6 +27,16 @@ class TransformerCore(nn.Module):
         self.dropword = dropword # drop entire tokens
         self.mu = LinearWeightNorm(latent_dim, latent_dim, bias=True)
         self.logvar = LinearWeightNorm(latent_dim, latent_dim, bias=True)
+        self.single_z = single_z
+
+        if self.single_z:
+            self.single_mu = nn.Sequential(
+                nn.Conv1d(embed_dim, embed_dim, 4),
+            )
+            self.single_logvar = nn.Sequential(
+                nn.Conv1d(embed_dim, embed_dim, 4)
+            )
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -43,8 +54,17 @@ class TransformerCore(nn.Module):
         for layer in self.layers:
             x = layer(x, mask, src_enc, key_mask)
 
+
         mu = self.mu(x) * tgt_masks.unsqueeze(2)
         logvar = self.logvar(x) * tgt_masks.unsqueeze(2)
+        if self.single_z:
+            mu = mu.transpose(1, 2)
+            logvar = logvar.transpose(1, 2)
+            mu = self.single_mu(mu)
+            logvar = self.single_logvar(logvar)
+            mu = mu.max(dim=2)[0].unsqueeze(1)
+            logvar = logvar.max(dim=2)[0].unsqueeze(1)
+
         return mu, logvar
 
     def init(self, tgt_sents, tgt_masks, src_enc, src_masks, init_scale=1.0, init_mu=True, init_var=True):
@@ -72,10 +92,11 @@ class TransformerPosterior(Posterior):
     Posterior with Transformer
     """
     def __init__(self, vocab_size, embed_dim, padding_idx, num_layers, latent_dim, hidden_size, heads,
-                 dropout=0.0, dropword=0.0, max_length=100, _shared_embed=None):
+                 dropout=0.0, dropword=0.0, max_length=100, _shared_embed=None,
+                 single_z=False):
         super(TransformerPosterior, self).__init__(vocab_size, embed_dim, padding_idx, _shared_embed=_shared_embed)
         self.core = TransformerCore(self.tgt_embed, num_layers, latent_dim, hidden_size, heads,
-                                    dropout=dropout, dropword=dropword, max_length=max_length)
+                                    dropout=dropout, dropword=dropword, max_length=max_length, single_z=single_z)
 
     def target_embed_weight(self):
         if isinstance(self.core, nn.DataParallel):
@@ -92,6 +113,10 @@ class TransformerPosterior(Posterior):
                src_enc: torch.Tensor, src_masks: torch.Tensor,
                nsamples: int =1, random=True) -> Tuple[torch.Tensor, torch.Tensor]:
         mu, logvar = self.core(tgt_sents, tgt_masks, src_enc, src_masks)
+
+        if self.core.single_z:
+            tgt_masks = torch.ones([mu.shape[0], 1], device=mu.device)
+
         z, eps = Posterior.reparameterize(mu, logvar, tgt_masks, nsamples=nsamples, random=random)
         log_probs = Posterior.log_probability(z, eps, mu, logvar, tgt_masks)
         return z, log_probs

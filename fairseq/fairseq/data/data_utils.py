@@ -38,7 +38,6 @@ def collate_tokens(values, pad_idx, eos_idx=None, left_pad=False, move_eos_to_be
     def copy_tensor(src, dst):
         assert dst.numel() == src.numel()
         if move_eos_to_beginning:
-            assert src[-1] == eos_idx
             dst[0] = eos_idx
             dst[1:] = src[:-1]
         else:
@@ -233,6 +232,22 @@ def batch_by_size(
         indices = np.fromiter(indices, dtype=np.int64, count=-1)
 
     return batch_by_size_fast(indices, num_tokens_fn, max_tokens, max_sentences, bsz_mult)
+
+def batch_by_first_token(
+    batch_sampler,
+    fn_first_token
+):
+    target_sampler = []
+    for source_batch in batch_sampler:
+        target_batches = {}
+        for idx in source_batch:
+            first_token = fn_first_token(idx).item()
+            if first_token not in target_batches.keys():
+                target_batches[first_token] = []
+            target_batches[first_token].append(idx)
+        for target_batch in target_batches.values():
+            target_sampler.append(target_batch)
+    return target_sampler
 
 
 def process_bpe_symbol(sentence: str, bpe_symbol: str):

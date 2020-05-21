@@ -57,9 +57,9 @@ class FairseqDecoder(nn.Module):
 
     def get_normalized_probs(
         self,
-        net_output: Tuple[Tensor, Dict[str, List[Optional[Tensor]]]],
+        net_output: Tuple[Tensor, Optional[Dict[str, List[Optional[Tensor]]]]],
         log_probs: bool,
-        sample: Optional[Dict[str, Tensor]],
+        sample: Optional[Dict[str, Tensor]] = None,
     ):
         """Get normalized probabilities (or log probs) from a net's output."""
 
@@ -78,6 +78,46 @@ class FairseqDecoder(nn.Module):
         else:
             return utils.softmax(logits, dim=-1, onnx_trace=self.onnx_trace)
 
+    def get_logits(
+        self,
+        net_output
+    ):
+        """Get logits from a net's output."""
+        if net_output is None:
+            return None
+        return net_output[0]
+
+    def get_avg_attn_scores(
+        self,
+        net_output
+    ):
+        """Get average attn scores from a net's output."""
+        if net_output is None:
+            return None
+        return net_output[1]
+
+    def get_prior_log_probability(
+        self,
+        net_output
+    ):
+        """Get prior log probabilities from a net's output."""
+        raise NotImplementedError
+
+    def get_posterior_log_probability(
+        self,
+        net_output
+    ):
+        """Get posterior log probabilities from a net's output."""
+        raise NotImplementedError
+
+    def update_logits(
+        self,
+        net_output,
+        logits
+    ):
+        """Set logits to a net's output."""
+        return (logits, net_output[1])
+
     def max_positions(self):
         """Maximum input length supported by the decoder."""
         return 1e6  # an arbitrary large number
@@ -88,3 +128,7 @@ class FairseqDecoder(nn.Module):
 
     def prepare_for_onnx_export_(self):
         self.onnx_trace = True
+
+    def set_num_updates(self, num_updates):
+        """ State from trainer to pass along to model at every update """
+        self.num_updates = num_updates

@@ -165,6 +165,8 @@ class LanguagePairDataset(FairseqDataset):
             assert src_dict.pad() == tgt_dict.pad()
             assert src_dict.eos() == tgt_dict.eos()
             assert src_dict.unk() == tgt_dict.unk()
+        if tgt is not None:
+            assert len(src) == len(tgt), "Source and target must contain the same number of examples"
         self.src = src
         self.tgt = tgt
         self.src_sizes = np.array(src_sizes)
@@ -262,6 +264,9 @@ class LanguagePairDataset(FairseqDataset):
         """Return the number of tokens in a sample. This value is used to
         enforce ``--max-tokens`` during batching."""
         return max(self.src_sizes[index], self.tgt_sizes[index] if self.tgt_sizes is not None else 0)
+
+    def first_token(self, index):
+        return self.src[index][0]
 
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when

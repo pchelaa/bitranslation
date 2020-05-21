@@ -16,6 +16,7 @@ from .colorize_dataset import ColorizeDataset
 from .concat_dataset import ConcatDataset
 from .concat_sentences_dataset import ConcatSentencesDataset
 from .denoising_dataset import DenoisingDataset
+from .even_dataset import EvenDataset
 from .id_dataset import IdDataset
 from .indexed_dataset import IndexedCachedDataset, IndexedDataset, IndexedRawTextDataset, MMapIndexedDataset
 from .language_pair_dataset import LanguagePairDataset
@@ -38,7 +39,6 @@ from .replace_dataset import ReplaceDataset
 from .resampling_dataset import ResamplingDataset
 from .roll_dataset import RollDataset
 from .round_robin_zip_datasets import RoundRobinZipDatasets
-from .sharded_dataset import ShardedDataset
 from .sort_dataset import SortDataset
 from .strip_token_dataset import StripTokenDataset
 from .subsample_dataset import SubsampleDataset
@@ -65,6 +65,7 @@ __all__ = [
     'DenoisingDataset',
     'Dictionary',
     'EpochBatchIterator',
+    'EvenDataset'
     'FairseqDataset',
     'FairseqIterableDataset',
     'GroupedIterator',
@@ -96,7 +97,6 @@ __all__ = [
     'ResamplingDataset',
     'RightPadDataset',
     'RoundRobinZipDatasets',
-    'ShardedDataset',
     'ShardedIterator',
     'SortDataset',
     'StripTokenDataset',
